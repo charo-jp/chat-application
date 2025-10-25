@@ -1,5 +1,7 @@
 {
   "dependencies": {
+    "@prisma/client": "^6.18.0",
+    "dotenv": "^17.2.3",
     "fastify": "^5.6.1"
   },
   "name": "backend",
@@ -7,8 +9,10 @@
   "description": "",
   "main": "index.js",
   "devDependencies": {
-    "@types/node": "^24.5.2",
-    "typescript": "^5.9.2"
+    "@types/node": "^24.9.1",
+    "prisma": "^6.18.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
