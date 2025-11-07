@@ -1,5 +1,6 @@
 import "dotenv/config";
 import fastify from "fastify";
+import puppeteer from "puppeteer";
 import { PrismaClient } from "./generated/prisma/client.js";
 
 /**

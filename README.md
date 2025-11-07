@@ -16,7 +16,7 @@
 
 - Branch
 
-  > feature**\*issue_no\*\*\***ui or api**\_**title\*\*
+  > issue*{issue_no}*{backend or frontend}\_{task_name}
 
 - Code style guide
 
