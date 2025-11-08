@@ -47,7 +47,7 @@ model Profile {
 }
 
 model Friend {
-  user User @relation( "User" ,fields: [userId], references: [id])
+  user User @relation("User",fields: [userId], references: [id])
   userId String @map("user_id")
   friend User @relation("Friends" ,fields: [friendId], references: [id])
   friendId String @map("friend_id")
