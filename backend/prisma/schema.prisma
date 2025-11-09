@@ -7,6 +7,7 @@
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
+  previewFeatures = ["strictUndefinedChecks"]
 }
 
 datasource db {
@@ -14,9 +15,101 @@ datasource db {
   url = env("DATABASE_URL")
 }
 
+generator erd {
+  provider = "prisma-erd-generator"
+}
+
+
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
+  id        String   @id @default(uuid())
+  username  String 
   email     String   @unique
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  profile Profile?
+  chatRoomMember ChatRoomMember[]
+  message Message[]
+  messageStatus MessageStatus[]
+  user Friend[] @relation("User")
+  friend Friend[] @relation("Friends")
+  @@map("user") 
+}
+
+model Profile {
+  id String @id 
+  birthday DateTime?
+  statusMessage String? @db.VarChar(500) @map("status_message")
+  backgroundPicUrl String? @map("background_pic_url")
+  profilePicUrl String? @map("profile_pic_url")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user User @relation(fields: [id], references: [id], onDelete: Cascade)
+  @@map("profile")
+}
+
+model Friend {
+  user User @relation("User",fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  friend User @relation("Friends" ,fields: [friendId], references: [id], onDelete: Cascade)
+  friendId String @map("friend_id")
+  @@unique([userId, friendId])
+  @@map("friend")
+}
+
+model Message {
+  id String @id @default(uuid())
+  content String
+  user User @relation(fields: [senderId], references: [id])
+  senderId String @map("sender_id") 
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  chatRoomId String @map("chat_room_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  messageStatus MessageStatus[]
+  @@index([chatRoomId])
+  @@index([chatRoomId, senderId])
+  @@map("message")
+}
+
+model MessageStatus {
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String @map("message_id")
+  user User @relation(fields: [userId], references: [id])
+  userId String @map("user_id")
+  isRead Boolean
+  @@unique([messageId, userId])
+  @@map("message_status")
+}
+
+model ChatRoom {
+  id String @id @default(uuid())
+  roomName String @map("room_name")
+  type ChatRoomType @default(GROUP) 
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  messages Message[]
+  chatRoomMember ChatRoomMember[]
+  @@index([roomName])
+  @@map("chatroom")
+}
+
+model ChatRoomMember {
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  chatRoomId String @map("chat_room_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  role ChatRoomRole @default(MEMBER) @map("role")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  joinedAt DateTime @default(now()) @map("joined_at")
+  @@id([chatRoomId, userId])
+  @@map("chatroom_member")
+}
+
+enum ChatRoomRole {
+  ADMIN
+  MEMBER
+  BLOCKED
+}
+
+enum ChatRoomType {
+  DM // Two Person Rooms
+  GROUP
 }
