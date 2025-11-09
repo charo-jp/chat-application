@@ -42,14 +42,14 @@ model Profile {
   backgroundPicUrl String? @map("background_pic_url")
   profilePicUrl String? @map("profile_pic_url")
   updatedAt DateTime @updatedAt @map("updated_at")
-  user User @relation(fields: [id], references: [id])
+  user User @relation(fields: [id], references: [id], onDelete: Cascade)
   @@map("profile")
 }
 
 model Friend {
-  user User @relation("User",fields: [userId], references: [id])
+  user User @relation("User",fields: [userId], references: [id], onDelete: Cascade)
   userId String @map("user_id")
-  friend User @relation("Friends" ,fields: [friendId], references: [id])
+  friend User @relation("Friends" ,fields: [friendId], references: [id], onDelete: Cascade)
   friendId String @map("friend_id")
   @@unique([userId, friendId])
   @@map("friend")
@@ -64,6 +64,8 @@ model Message {
   chatRoomId String @map("chat_room_id")
   createdAt DateTime @default(now()) @map("created_at")
   messageStatus MessageStatus[]
+  @@index([chatRoomId])
+  @@index([chatRoomId, senderId])
   @@map("message")
 }
 
@@ -85,6 +87,7 @@ model ChatRoom {
   updatedAt DateTime @updatedAt @map("updated_at")
   messages Message[]
   chatRoomMember ChatRoomMember[]
+  @@index([roomName])
   @@map("chatroom")
 }
 
