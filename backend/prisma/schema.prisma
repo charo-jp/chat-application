@@ -60,7 +60,7 @@ model Message {
   content String
   user User @relation(fields: [senderId], references: [id])
   senderId String @map("sender_id") 
-  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
   chatRoomId String @map("chat_room_id")
   createdAt DateTime @default(now()) @map("created_at")
   messageStatus MessageStatus[]
@@ -70,7 +70,7 @@ model Message {
 }
 
 model MessageStatus {
-  message Message @relation(fields: [messageId], references: [id])
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
   messageId String @map("message_id")
   user User @relation(fields: [userId], references: [id])
   userId String @map("user_id")
@@ -92,9 +92,9 @@ model ChatRoom {
 }
 
 model ChatRoomMember {
-  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
   chatRoomId String @map("chat_room_id")
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String @map("user_id")
   role ChatRoomRole @default(MEMBER) @map("role")
   updatedAt DateTime @updatedAt @map("updated_at")
