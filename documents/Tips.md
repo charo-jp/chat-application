@@ -60,7 +60,7 @@
   > npx prisma migrate dev --name init
   > The command generates a new migration based on your schema defined in "schema.prisma" file.
   > It creates migration files that **keep track of changes**.
-  > You need to run this command whenever you change prisma schema.
+  > You need to run this command **WHENEVER you change prisma schema**.
 
 - Two ways to update your database schema.
 
@@ -70,3 +70,6 @@
 
   - update your database schema directly (without creating migration files).
   - good for early development where shcema changes are frequent.
+
+- show data inside database
+  > prisma studio
