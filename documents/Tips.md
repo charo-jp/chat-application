@@ -72,4 +72,10 @@
   - good for early development where shcema changes are frequent.
 
 - show data inside database
-  > prisma studio
+  > npx prisma studio
+
+## Vite
+
+- run the server
+  > npm run dev
+  - Run Vite and Storybook at the same time: npm run start:all
