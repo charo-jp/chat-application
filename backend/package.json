@@ -13,7 +13,7 @@
     "@types/node": "^24.9.1",
     "prisma": "^6.19.1",
     "prisma-erd-generator": "^2.1.0",
-    "puppeteer": "^24.29.1",
+    "puppeteer": "^23.0.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
