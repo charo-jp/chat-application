@@ -1,7 +1,7 @@
 import "dotenv/config";
 import fastify from "fastify";
-import { PrismaClient, type User } from "./generated/prisma/client.ts";
-import { PrismaClientKnownRequestError } from "./generated/prisma/internal/prismaNamespace.ts";
+import { userRoutes } from "./routes/user.ts";
+import { Prisma } from "./generated/prisma/client.ts";
 
 /**
  * server
@@ -9,31 +9,26 @@ import { PrismaClientKnownRequestError } from "./generated/prisma/internal/prism
 const server = fastify();
 
 /**
- * prisma
+ * Error Handler
  */
-const prisma = new PrismaClient();
+server.setErrorHandler((error, _request, reply) => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    // Error Codes Reference URL: https://www.prisma.io/docs/orm/reference/error-reference
+    if (error.code === "P2025") {
+      server.log.error(error);
+      return reply.status(404).send({ error: "Not Found" });
+    }
+    // Add error codes here:
+  }
+
+  server.log.error(error);
+  return reply.status(500).send({ error: "Internal Server Error" });
+});
 
 /**
- * Get A User Information
+ * Register Routes with prefixs
  */
-server.get<{ Params: { id: string } }>("/user/:id", async (request, reply) => {
-  // It needs to be aligned with key's name on a table
-  const { id } = request.params;
-
-  try {
-    const user = await prisma.user.findFirstOrThrow({
-      where: { id: id },
-    });
-
-    if (!user) {
-      return reply.status(404).send({ error: "User not found" });
-    }
-
-    return user;
-  } catch (error) {
-    return reply.status(500).send({ error: "Internal Server Error" });
-  }
-});
+server.register(userRoutes, { prefix: "/users" });
 
 server.listen({ port: 8080 }, (err, address) => {
   if (err) {
@@ -42,19 +37,3 @@ server.listen({ port: 8080 }, (err, address) => {
   }
   console.log(`Server listening at ${address}`);
 });
-
-async function main() {
-  // ... you will write your Prisma Client queries here
-  const allUsers = await prisma.user.findMany();
-  console.log(allUsers);
-}
-
-main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (e) => {
-    console.error(e);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
