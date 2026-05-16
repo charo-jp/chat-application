@@ -1,20 +1,23 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Defines the structure and generation instructions. This file is declarative. 
+// It tells Prisma what to create, not how to run it dynamically. It is used at build time
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// Generator is used to tell Prisma which tools to run. 
+// prisma-client generates the type-safe database client.
 generator client {
   provider = "prisma-client"
+  // output specifies where the generated client code will be placed.
   output   = "../generated/prisma"
   previewFeatures = ["strictUndefinedChecks"]
 }
 
+// It specifies which database to be used.
 datasource db {
   provider = "postgresql"
   url = env("DATABASE_URL")
 }
 
+// Prisma-erd-generator generates the entity relationship diagram.
+// ERD refers to Entity Relationship Diagram.
 generator erd {
   provider = "prisma-erd-generator"
 }
