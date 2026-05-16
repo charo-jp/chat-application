@@ -11,6 +11,7 @@ const server = fastify({
     transport: {
       // Use pino-pretty for pretty-printing logs in development
       // Use request object if you want to log request details
+      // TODO: change this so that json is outputted on production mode.
       target: "pino-pretty",
     },
   },
@@ -23,7 +24,7 @@ server.setErrorHandler((error, _request, reply) => {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     // Error Codes Reference URL: https://www.prisma.io/docs/orm/reference/error-reference
     if (error.code === "P2025") {
-      const message = `${error.meta?.modelName} Not Found`;
+      const message = `${error.meta?.modelName ?? "Resource"} Not Found`;
       // Not Found is not a server error so warn is used instead of error.
       server.log.warn(message);
       return reply.status(404).send({ error: message });
