@@ -5,6 +5,7 @@
 // prisma-client generates the type-safe database client.
 generator client {
   provider = "prisma-client"
+  // output specifies where the generated client code will be placed.
   output   = "../generated/prisma"
   previewFeatures = ["strictUndefinedChecks"]
 }
@@ -12,6 +13,7 @@ generator client {
 // It specifies which database to be used.
 datasource db {
   provider = "postgresql"
+  url = env("DATABASE_URL")
 }
 
 // Prisma-erd-generator generates the entity relationship diagram.
