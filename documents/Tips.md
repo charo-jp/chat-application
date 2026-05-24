@@ -41,6 +41,10 @@
 
   > \dt
 
+- Show a list of user database
+
+  > SELECT * FROM "user";
+
 ## ORM commands
 
 - Print a list of commands available
@@ -58,8 +62,8 @@
 - Migrate schema to database
 
   > npx prisma migrate dev --name init
-  > The command generates a new migration based on your schema defined in "schema.prisma" file.
-  > It creates migration files that **keep track of changes**.
+  > The command generates a new migration filebased on your schema defined in "schema.prisma" file.
+  > A migration file is like a git commit. It **keeps track of changes**.
   > You need to run this command **WHENEVER you change prisma schema**.
 
 - Two ways to update your database schema.
@@ -67,7 +71,6 @@
   > prisma migrate dev
 
   > prisma db push
-
   - update your database schema directly (without creating migration files).
   - good for early development where shcema changes are frequent.
 
@@ -75,7 +78,10 @@
   > npx prisma studio
 
 ## Vite
-
 - run the server
   > npm run dev
   - Run Vite and Storybook at the same time: npm run start:all
+
+## Backend
+Running the backend
+- npm start 
