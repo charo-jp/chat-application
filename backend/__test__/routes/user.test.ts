@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyRequest } from "fastify";
 import prisma from "../../prisma.ts";
 import {
   getMyUserInfoHandler,
@@ -7,31 +7,7 @@ import {
   getUserProfileHandler,
 } from "../../routes/users.ts";
 import { otherUserInfoSelect } from "../../schemas/user.schema.ts";
-
-const createMockRequest = (params: any, user?: { id: string }) =>
-  ({
-    params,
-    user: user ?? {},
-    log: {
-      info: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      trace: vi.fn(),
-      fatal: vi.fn(),
-      silent: vi.fn(),
-      child: () => ({}) as any,
-    },
-  }) as any;
-
-const createMockReply = () => {
-  const reply = {
-    status: vi.fn(),
-    send: vi.fn(),
-  };
-  reply.status.mockReturnValue(reply);
-  return reply as unknown as FastifyReply;
-};
+import { createMockRequest, createMockReply } from "../helpers.ts";
 
 vi.mock("../../prisma.ts", () => ({
   default: {
@@ -51,6 +27,7 @@ describe("User Handlers", () => {
 
   describe("getMyUserInfoHandler", () => {
     it("should return the authenticated user's information", async () => {
+      // Data Preps
       const mockUser = {
         id: "123",
         username: "testuser",
@@ -59,13 +36,18 @@ describe("User Handlers", () => {
         updatedAt: new Date(),
         profile: null,
       };
+
+      const request = createMockRequest({ params: {}, user: { id: "123" } }) as unknown as FastifyRequest;
+
+      // Mock Functions
       (prisma.user.findUnique as any).mockResolvedValue(mockUser);
 
-      const request = createMockRequest({}, { id: "123" }) as unknown as FastifyRequest;
       const reply = createMockReply();
 
+      // Execution of a targeted Function
       const result = await getMyUserInfoHandler(request, reply);
 
+      // Evaluations
       expect(prisma.user.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "123" } }),
       );
@@ -73,13 +55,18 @@ describe("User Handlers", () => {
     });
 
     it("should return 404 when the authenticated user is not found", async () => {
+      // Data Preps
+      const request = createMockRequest({ params: {}, user: { id: "123" } }) as unknown as FastifyRequest;
+
+      // Mock Functions
       (prisma.user.findUnique as any).mockResolvedValue(null);
 
-      const request = createMockRequest({}, { id: "123" }) as unknown as FastifyRequest;
       const reply = createMockReply();
 
+      // Execution of a targeted Function
       await getMyUserInfoHandler(request, reply);
 
+      // Evaluations
       expect(reply.status).toHaveBeenCalledWith(404);
       expect(reply.send).toHaveBeenCalledWith({ error: "User not found" });
     });
@@ -87,20 +74,26 @@ describe("User Handlers", () => {
 
   describe("getOtherUserInfoHandler", () => {
     it("should return user data when user exists", async () => {
+      // Data Preps
       const mockUser = {
         id: "123",
         username: "testuser",
         email: "test@example.com",
       };
-      (prisma.user.findUnique as any).mockResolvedValue(mockUser);
 
-      const request = createMockRequest({ id: "123" }) as unknown as FastifyRequest<{
+      const request = createMockRequest({ params: { id: "123" } }) as unknown as FastifyRequest<{
         Params: { id: string };
       }>;
+
+      // Mock Functions
+      (prisma.user.findUnique as any).mockResolvedValue(mockUser);
+
       const reply = createMockReply();
 
+      // Execution of a targeted Function
       const result = await getOtherUserInfoHandler(request, reply);
 
+      // Evaluations
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: "123" },
         select: otherUserInfoSelect,
@@ -109,15 +102,20 @@ describe("User Handlers", () => {
     });
 
     it("should return 404 when user does not exist", async () => {
-      (prisma.user.findUnique as any).mockResolvedValue(null);
-
-      const request = createMockRequest({ id: "123" }) as unknown as FastifyRequest<{
+      // Data Preps
+      const request = createMockRequest({ params: { id: "123" } }) as unknown as FastifyRequest<{
         Params: { id: string };
       }>;
+
+      // Mock Functions
+      (prisma.user.findUnique as any).mockResolvedValue(null);
+
       const reply = createMockReply();
 
+      // Execution of a targeted Function
       await getOtherUserInfoHandler(request, reply);
 
+      // Evaluations
       expect(reply.status).toHaveBeenCalledWith(404);
       expect(reply.send).toHaveBeenCalledWith({ error: "User not found" });
     });
@@ -125,16 +123,22 @@ describe("User Handlers", () => {
 
   describe("getUserProfileHandler", () => {
     it("should return profile data when profile exists", async () => {
+      // Data Preps
       const mockProfile = { id: "123", bio: "Hello world" };
-      (prisma.profile.findUnique as any).mockResolvedValue(mockProfile);
 
-      const request = createMockRequest({ id: "123" }) as unknown as FastifyRequest<{
+      const request = createMockRequest({ params: { id: "123" } }) as unknown as FastifyRequest<{
         Params: { id: string };
       }>;
+
+      // Mock Functions
+      (prisma.profile.findUnique as any).mockResolvedValue(mockProfile);
+
       const reply = createMockReply();
 
+      // Execution of a targeted Function
       const result = await getUserProfileHandler(request, reply);
 
+      // Evaluations
       expect(prisma.profile.findUnique).toHaveBeenCalledWith({
         where: { id: "123" },
       });
@@ -142,15 +146,20 @@ describe("User Handlers", () => {
     });
 
     it("should return 404 when profile does not exist", async () => {
-      (prisma.profile.findUnique as any).mockResolvedValue(null);
-
-      const request = createMockRequest({ id: "999" }) as unknown as FastifyRequest<{
+      // Data Preps
+      const request = createMockRequest({ params: { id: "999" } }) as unknown as FastifyRequest<{
         Params: { id: string };
       }>;
+
+      // Mock Functions
+      (prisma.profile.findUnique as any).mockResolvedValue(null);
+
       const reply = createMockReply();
 
+      // Execution of a targeted Function
       await getUserProfileHandler(request, reply);
 
+      // Evaluations
       expect(reply.status).toHaveBeenCalledWith(404);
       expect(reply.send).toHaveBeenCalledWith({ error: "Profile not found" });
     });
