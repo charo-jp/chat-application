@@ -33,11 +33,14 @@ ORM (Object Relation Mapping) is chosen for multiple reasons:
 ## API
 
 While ExpressJS has been a popular choice for APIs, Fastify is chosen for its speed.
-According to [this website](https://medium.com/@ignatovich.dm/express-js-vs-fastify-comparison-for-building-node-js-applications-0a6c8aca0136), Fastify can take requests four times more than Express can take. As the chat application should be designed to have an ability to accept thousands of requests, Fastify was selected for the project.
+According to [this website](https://medium.com/@ignatovich.dm/express-js-vs-fastify-comparison-for-building-node-js-applications-0a6c8aca0136), Fastify can take requests four times more than Express can take. As the chat application should be designed to have an ability to accept thousands of requests in a short amount of time, Fastify was selected for the project.
 
 ## Routing
 
 Tanstack is the choice of this application due to its type safety and rich features such as built-in route loaders. In addition to that, I am simply interested in Tanstack.
+
+## Authentication
+TODO: write something here.
 
 ## State Management
 
