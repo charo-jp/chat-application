@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import prisma from "../../prisma.ts";
 import {
   getMyUserInfoHandler,
@@ -8,9 +8,10 @@ import {
 } from "../../routes/users.ts";
 import { otherUserInfoSelect } from "../../schemas/user.schema.ts";
 
-const createMockRequest = (params: any) =>
+const createMockRequest = (params: any, user?: { id: string }) =>
   ({
     params,
+    user: user ?? {},
     log: {
       info: vi.fn(),
       error: vi.fn(),
@@ -19,18 +20,26 @@ const createMockRequest = (params: any) =>
       trace: vi.fn(),
       fatal: vi.fn(),
       silent: vi.fn(),
-      child: () => ({}) as any, // child loggerが必要な場合
+      child: () => ({}) as any,
     },
   }) as any;
 
-// Mock the prisma client
+const createMockReply = () => {
+  const reply = {
+    status: vi.fn(),
+    send: vi.fn(),
+  };
+  reply.status.mockReturnValue(reply);
+  return reply as unknown as FastifyReply;
+};
+
 vi.mock("../../prisma.ts", () => ({
   default: {
     user: {
-      findFirstOrThrow: vi.fn(),
+      findUnique: vi.fn(),
     },
     profile: {
-      findFirstOrThrow: vi.fn(),
+      findUnique: vi.fn(),
     },
   },
 }));
@@ -41,89 +50,109 @@ describe("User Handlers", () => {
   });
 
   describe("getMyUserInfoHandler", () => {
-    it("should throw until authentication is implemented", async () => {
-      const request = createMockRequest({}) as unknown as FastifyRequest;
+    it("should return the authenticated user's information", async () => {
+      const mockUser = {
+        id: "123",
+        username: "testuser",
+        email: "test@example.com",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        profile: null,
+      };
+      (prisma.user.findUnique as any).mockResolvedValue(mockUser);
 
-      await expect(getMyUserInfoHandler(request)).rejects.toThrow(
-        "Not implemented: authentication required",
+      const request = createMockRequest({}, { id: "123" }) as unknown as FastifyRequest;
+      const reply = createMockReply();
+
+      const result = await getMyUserInfoHandler(request, reply);
+
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: "123" } }),
       );
+      expect(result).toEqual(mockUser);
+    });
+
+    it("should return 404 when the authenticated user is not found", async () => {
+      (prisma.user.findUnique as any).mockResolvedValue(null);
+
+      const request = createMockRequest({}, { id: "123" }) as unknown as FastifyRequest;
+      const reply = createMockReply();
+
+      await getMyUserInfoHandler(request, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(404);
+      expect(reply.send).toHaveBeenCalledWith({ error: "User not found" });
     });
   });
 
   describe("getOtherUserInfoHandler", () => {
     it("should return user data when user exists", async () => {
-      // 1. Data Preparation
       const mockUser = {
         id: "123",
         username: "testuser",
         email: "test@example.com",
       };
-      // Type casting mock to any to avoid TS issues with deep partial mocking
-      (prisma.user.findFirstOrThrow as any).mockResolvedValue(mockUser);
+      (prisma.user.findUnique as any).mockResolvedValue(mockUser);
 
-      const requestMock = createMockRequest({
-        id: "123",
-      }) as unknown as FastifyRequest<{
+      const request = createMockRequest({ id: "123" }) as unknown as FastifyRequest<{
         Params: { id: string };
       }>;
+      const reply = createMockReply();
 
-      // 2. Execution
-      const result = await getOtherUserInfoHandler(requestMock);
+      const result = await getOtherUserInfoHandler(request, reply);
 
-      // 3. Evaluation
-      expect(prisma.user.findFirstOrThrow).toHaveBeenCalledWith({
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: "123" },
         select: otherUserInfoSelect,
       });
-
       expect(result).toEqual(mockUser);
     });
 
-    it("should throw error when user does not exist", async () => {
-      const error = new Error("User not found");
+    it("should return 404 when user does not exist", async () => {
+      (prisma.user.findUnique as any).mockResolvedValue(null);
 
-      (prisma.user.findFirstOrThrow as any).mockRejectedValue(error);
-
-      const requestMock = createMockRequest({
-        id: "123",
-      }) as unknown as FastifyRequest<{
+      const request = createMockRequest({ id: "123" }) as unknown as FastifyRequest<{
         Params: { id: string };
       }>;
+      const reply = createMockReply();
 
-      await expect(getOtherUserInfoHandler(requestMock)).rejects.toThrow(
-        "User not found",
-      );
+      await getOtherUserInfoHandler(request, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(404);
+      expect(reply.send).toHaveBeenCalledWith({ error: "User not found" });
     });
   });
 
   describe("getUserProfileHandler", () => {
     it("should return profile data when profile exists", async () => {
       const mockProfile = { id: "123", bio: "Hello world" };
-      (prisma.profile.findFirstOrThrow as any).mockResolvedValue(mockProfile);
+      (prisma.profile.findUnique as any).mockResolvedValue(mockProfile);
 
       const request = createMockRequest({ id: "123" }) as unknown as FastifyRequest<{
         Params: { id: string };
       }>;
+      const reply = createMockReply();
 
-      const result = await getUserProfileHandler(request);
+      const result = await getUserProfileHandler(request, reply);
 
-      expect(prisma.profile.findFirstOrThrow).toHaveBeenCalledWith({
+      expect(prisma.profile.findUnique).toHaveBeenCalledWith({
         where: { id: "123" },
       });
       expect(result).toEqual(mockProfile);
     });
 
-    it("should throw error when profile does not exist", async () => {
-      const error = new Error("Profile not found");
-      (prisma.profile.findFirstOrThrow as any).mockRejectedValue(error);
+    it("should return 404 when profile does not exist", async () => {
+      (prisma.profile.findUnique as any).mockResolvedValue(null);
 
       const request = createMockRequest({ id: "999" }) as unknown as FastifyRequest<{
         Params: { id: string };
       }>;
+      const reply = createMockReply();
 
-      await expect(getUserProfileHandler(request)).rejects.toThrow(
-        "Profile not found",
-      );
+      await getUserProfileHandler(request, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(404);
+      expect(reply.send).toHaveBeenCalledWith({ error: "Profile not found" });
     });
   });
 });

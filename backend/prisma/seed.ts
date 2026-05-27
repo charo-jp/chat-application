@@ -1,4 +1,5 @@
 import "dotenv/config";
+import bcrypt from "bcrypt";
 import { PrismaClient } from "../generated/prisma/client.js";
 
 const prisma = new PrismaClient();
@@ -17,42 +18,50 @@ async function main() {
 
   console.log("🧹 Cleaned existing data");
 
+  const defaultPassword = await bcrypt.hash("password123", 10);
+
   // Create Users
   const users = await Promise.all([
     prisma.user.create({
       data: {
         username: "alice_wonder",
         email: "alice@example.com",
+        password: defaultPassword,
       },
     }),
     prisma.user.create({
       data: {
         username: "bob_builder",
         email: "bob@example.com",
+        password: defaultPassword,
       },
     }),
     prisma.user.create({
       data: {
         username: "charlie_chap",
         email: "charlie@example.com",
+        password: defaultPassword,
       },
     }),
     prisma.user.create({
       data: {
         username: "diana_dev",
         email: "diana@example.com",
+        password: defaultPassword,
       },
     }),
     prisma.user.create({
       data: {
         username: "ethan_explorer",
         email: "ethan@example.com",
+        password: defaultPassword,
       },
     }),
     prisma.user.create({
       data: {
         username: "fiona_fitness",
         email: "fiona@example.com",
+        password: defaultPassword,
       },
     }),
   ]);
