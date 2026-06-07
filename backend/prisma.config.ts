@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env.ts";
 import { defineConfig, env } from "prisma/config";
 
 // This file is used to define runtime behavior and logic.
