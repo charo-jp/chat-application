@@ -40,7 +40,24 @@ According to [this website](https://medium.com/@ignatovich.dm/express-js-vs-fast
 Tanstack is the choice of this application due to its type safety and rich features such as built-in route loaders. In addition to that, I am simply interested in Tanstack.
 
 ## Authentication
-TODO: write something here.
+
+JWT-based authentication via `@fastify/jwt`, with two separate token types stored as httpOnly cookies.
+
+**Access token**
+- Short-lived (15 minutes), signed with `JWT_ACCESS_TOKEN_SECRET`
+- Stored in an httpOnly cookie (`accessToken`), `path: "/"` — sent with every request
+- Verified by the `authenticate` decorator via `request.accessTokenJwtVerify()`
+
+**Refresh token**
+- Long-lived (7 days), signed with `JWT_REFRESH_TOKEN_SECRET`
+- Stored in an httpOnly cookie (`refreshToken`), `path: "/auth/refresh"` — only sent to the refresh endpoint
+- Rotated on each use; current value stored in the DB to detect reuse of revoked tokens
+
+**Why two separate secrets**
+Using different secrets per token type means a refresh token is cryptographically invalid as an access token — the separation is enforced by the signature itself, not just a payload field check.
+
+**Password hashing**
+bcrypt (cost factor 12). A pre-generated dummy hash (`BCRYPT_TIMING_DUMMY`) is used when the user is not found, so login response time is the same regardless of whether the email exists.
 
 ## State Management
 
