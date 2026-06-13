@@ -138,3 +138,13 @@ Useful when scripting or launching from the terminal:
 | `claude --resume <id>` | Resume a specific session |
 | `claude --cwd ./backend` | Start in a different directory |
 | `claude --print -p "..."` | Print response and exit (for scripts) |
+
+---
+
+## 13. Modes
+
+You get to select Claude Code Modes suitable for your needs.
+
+There modes are currently available:
+
+- [Link](https://code.claude.com/docs/en/permission-modes#available-modes)

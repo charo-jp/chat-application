@@ -77,6 +77,33 @@
 - show data inside database
   > npx prisma studio
 
+## How to update the database (schema change workflow)
+
+Run these from the `backend/` directory whenever you change `prisma/schema.prisma`
+(e.g. adding a field, model, or index).
+
+1. Edit `prisma/schema.prisma` — make your change (add/modify a field or model).
+
+2. Create and apply a migration:
+
+   > npx prisma migrate dev --name <short_description>
+
+   Example: `npx prisma migrate dev --name add_user_refresh_token`
+   - Generates a new migration file under `prisma/migrations/`.
+   - Applies the SQL to your local database.
+   - Regenerates the Prisma Client automatically, so your TypeScript types stay in sync.
+
+3. Verify (optional):
+
+   > npx prisma studio
+   - Opens a GUI to confirm the new column/table exists.
+
+Notes:
+- The `--name` is a human-readable label (like a git commit message). Keep it short and descriptive.
+- Commit the generated `prisma/migrations/` files — they are the source of truth for the DB schema and must be shared with the team.
+- Use `npx prisma migrate dev` (not `prisma db push`) so changes are tracked as migration files.
+- For applying existing migrations on another machine / in CI, use `npx prisma migrate deploy`.
+
 ## Vite
 - run the server
   > npm run dev

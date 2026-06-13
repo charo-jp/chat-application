@@ -1,44 +1,49 @@
-import "dotenv/config";
+import { isProduction } from "./load-env.ts";
 import fastify from "fastify";
+import rateLimit from "@fastify/rate-limit";
+import cookie from "@fastify/cookie";
+import { jwtPlugin } from "./plugins/jwt.ts";
+import { authRoutes } from "./routes/auth.ts";
 import { userRoutes } from "./routes/users.ts";
-import { Prisma } from "./generated/prisma/client.ts";
+import { rateLimitConfigurations } from "./plugins/rate-limit.ts";
+import { errorHandler } from "./error-handler.ts";
 
 /**
  * server
  */
 const server = fastify({
   logger: {
-    transport: {
-      // Use pino-pretty for pretty-printing logs in development
-      // Use request object if you want to log request details
-      // TODO: change this so that json is outputted on production mode.
-      target: "pino-pretty",
-    },
+    // Redaction protects sensitive data by preventing it from showing up in logs.
+    // For more details, visit https://getpino.io/#/docs/redaction
+    redact: ["req.headers.authorization", "*.password", "*.token"],
+    // Pretty-print logs in development; emit raw JSON in production.
+    // pino-pretty is a devDependency, so it must not be referenced in prod.
+    ...(isProduction
+      ? {}
+      : {
+          transport: {
+            target: "pino-pretty",
+          },
+        }),
   },
 });
 
 /**
  * Error Handler
  */
-server.setErrorHandler((error, _request, reply) => {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    // Error Codes Reference URL: https://www.prisma.io/docs/orm/reference/error-reference
-    if (error.code === "P2025") {
-      const message = `${error.meta?.modelName ?? "Resource"} Not Found`;
-      // Not Found is not a server error so warn is used instead of error.
-      server.log.warn(message);
-      return reply.status(404).send({ error: message });
-    }
-    // Add error codes here:
-  }
+server.setErrorHandler(errorHandler);
 
-  server.log.error(error);
-  return reply.status(500).send({ error: "Internal Server Error" });
-});
+/**
+ * Register Plugins
+ */
+server.register(jwtPlugin);
+server.register(rateLimit, rateLimitConfigurations);
+server.register(cookie);
 
 /**
  * Register Routes with prefixs
  */
+server.register(authRoutes, { prefix: "/auth" });
 server.register(userRoutes, { prefix: "/users" });
 
 server.listen({ port: 8080 }, (err, address) => {

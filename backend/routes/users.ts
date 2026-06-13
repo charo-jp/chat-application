@@ -1,4 +1,4 @@
-import { type FastifyInstance, type FastifyRequest } from "fastify";
+import { type FastifyInstance, type FastifyRequest, type FastifyReply } from "fastify";
 import prisma from "../prisma.ts";
 import {
   myInfoSelect,
@@ -14,12 +14,20 @@ import {
  */
 export const getMyUserInfoHandler = async (
   request: FastifyRequest,
+  reply: FastifyReply,
 ): Promise<MyUserInfoResponse> => {
-  request.log.info("getMyUserInfoHandler called");
+  const { id } = request.user;
+  request.log.info({ userId: id }, "getMyUserInfoHandler called");
 
-  // TODO: Replace with authenticated user's ID from session/token when implementing login
-  // const id = request.user.id;
-  throw new Error("Not implemented: authentication required");
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: myInfoSelect,
+  });
+
+  if (!user) return reply.status(404).send({ error: "User not found" });
+
+  request.log.info({ userId: user.id }, "getMyUserInfoHandler found user");
+  return user;
 };
 
 /**
@@ -28,15 +36,17 @@ export const getMyUserInfoHandler = async (
  */
 export const getOtherUserInfoHandler = async (
   request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
 ): Promise<OtherUserResponse> => {
   const { id } = request.params;
   request.log.info({ userId: id }, "getOtherUserInfoHandler called");
 
-  // it only returns a user when the user is found. Otherwise it throws an error.
-  const otherUser = await prisma.user.findFirstOrThrow({
+  const otherUser = await prisma.user.findUnique({
     where: { id },
     select: otherUserInfoSelect,
   });
+
+  if (!otherUser) return reply.status(404).send({ error: "User not found" });
 
   request.log.info({ userId: otherUser.id }, "getOtherUserInfoHandler found user");
   return otherUser;
@@ -50,12 +60,14 @@ export const getOtherUserInfoHandler = async (
  */
 export const getUserProfileHandler = async (
   request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
 ) => {
   const { id } = request.params;
   request.log.info({ profileId: id }, "getUserProfileHandler called");
 
-  // it only returns a profile when the profile is found. Otherwise it throws an error.
-  const profile = await prisma.profile.findFirstOrThrow({ where: { id } });
+  const profile = await prisma.profile.findUnique({ where: { id } });
+
+  if (!profile) return reply.status(404).send({ error: "Profile not found" });
 
   request.log.info({ profileId: profile.id }, "getUserProfileHandler found profile");
   return profile;
@@ -63,6 +75,8 @@ export const getUserProfileHandler = async (
 
 // Routes Definitions------------------------------------------------------
 export async function userRoutes(server: FastifyInstance) {
+  server.addHook("preHandler", server.authenticate);
+
   server.get("/me", getMyUserInfoHandler);
   server.get("/:id", getOtherUserInfoHandler);
   server.get("/:id/profile", getUserProfileHandler);
