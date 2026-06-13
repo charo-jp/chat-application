@@ -1,5 +1,5 @@
 import fp from "fastify-plugin";
-import fastifyJwt, { type JWT } from "@fastify/jwt";
+import fastifyJwt from "@fastify/jwt";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   ACCESS_TOKEN_COOKIE_NAME,
@@ -11,6 +11,10 @@ export const TOKEN_TYPES = {
   REFRESH: "refresh",
 } as const;
 type TokenTypes = (typeof TOKEN_TYPES)[keyof typeof TOKEN_TYPES];
+
+type JwtInstance = {
+  sign(payload: Record<string, unknown>, options?: { expiresIn?: string }): string;
+};
 
 /**
  * It defines the TypeScript types (or shape) for the decoded
@@ -33,8 +37,8 @@ declare module "fastify" {
       request: FastifyRequest,
       reply: FastifyReply,
     ) => Promise<void>;
-    accessTokenJwt: JWT;
-    refreshTokenJwt: JWT;
+    accessTokenJwt: JwtInstance;
+    refreshTokenJwt: JwtInstance;
   }
   interface FastifyRequest {
     accessTokenJwtVerify(): Promise<{ id: string; type?: TokenTypes }>;

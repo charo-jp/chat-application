@@ -6,6 +6,7 @@ import { jwtPlugin } from "./plugins/jwt.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { userRoutes } from "./routes/users.ts";
 import { rateLimitConfigurations } from "./plugins/rate-limit.ts";
+import { errorHandler } from "./error-handler.ts";
 
 /**
  * server
@@ -30,26 +31,7 @@ const server = fastify({
 /**
  * Error Handler
  */
-server.setErrorHandler((error, request, reply) => {
-  if (error.validation) {
-    // I want to customize the error so that I know what endpoint, what user if exists, and what field
-    // maybe so that I can improve UI or something
-
-    const method = request.method;
-    const url = request.url;
-
-    const user = request.user ? request.user : "";
-
-    const errorMessage = `Validation Error in ${method}: ${url}, message: ${error.validation} ${user ? `by ${user}` : ""}`;
-
-    request.log.warn(errorMessage);
-
-    return reply.status(400).send({ error: error.validation });
-  } else {
-    request.log.error(error);
-    return reply.status(500).send({ error: "Internal Server Error" });
-  }
-});
+server.setErrorHandler(errorHandler);
 
 /**
  * Register Plugins
