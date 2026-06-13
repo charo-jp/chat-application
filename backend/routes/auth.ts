@@ -33,8 +33,8 @@ export const loginHandler = async (
   request: FastifyRequest<{ Body: LoginRequest }>,
   reply: FastifyReply,
 ): Promise<void> => {
-  const { email, password } = request.body;
-  request.log.info(`loginHandler called with email: ${email}`);
+  const { email, password, deviceId } = request.body;
+  request.log.info({ email }, "loginHandler called");
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -68,9 +68,10 @@ export const loginHandler = async (
     { expiresIn: JWT_REFRESH_DURATION },
   );
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { refreshToken },
+  await prisma.loginStatus.upsert({
+    where: { userId_deviceId: { userId: user.id, deviceId } },
+    update: { refreshToken },
+    create: { userId: user.id, deviceId, refreshToken },
   });
 
   // Store the refresh token in an httpOnly cookie so it is not readable by
@@ -96,8 +97,26 @@ export const loginHandler = async (
 };
 
 /**
- * TODO: Implement Logout function
+ * Logout
  */
+export const logoutHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> => {
+  request.log.info("logoutHandler called");
+
+  const refreshToken = request.cookies[REFRESH_TOKEN_COOKIE_NAME];
+
+  if (refreshToken) {
+    await prisma.loginStatus.delete({
+      where: { refreshToken },
+    });
+  }
+
+  reply.clearCookie(ACCESS_TOKEN_COOKIE_NAME, { path: "/" });
+  reply.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: "/auth/refresh" });
+  reply.status(200).send();
+};
 
 /**
  * TODO: token refresh function
@@ -121,4 +140,5 @@ export async function authRoutes(server: FastifyInstance) {
     },
     loginHandler,
   );
+  server.post("/logout", logoutHandler);
 }

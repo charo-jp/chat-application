@@ -3,6 +3,7 @@ import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "../config.ts";
 export type LoginRequest = {
   email: string;
   password: string;
+  deviceId: string;
 };
 
 export const loginSchema = {
@@ -15,6 +16,8 @@ export const loginSchema = {
       minLength: PASSWORD_MIN_LENGTH,
       maxLength: PASSWORD_MAX_LENGTH,
     },
+    deviceId: { type: "string" },
   },
-  required: ["email", "password"],
+  required: ["email", "password", "deviceId"],
 };
+

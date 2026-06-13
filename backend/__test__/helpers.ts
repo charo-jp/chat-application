@@ -17,9 +17,15 @@ export const createMockRequest = (overrides: Record<string, any> = {}) =>
   }) as any;
 
 export const createMockReply = () => {
-  const reply = { status: vi.fn(), send: vi.fn(), setCookie: vi.fn() };
+  const reply = {
+    status: vi.fn(),
+    send: vi.fn(),
+    setCookie: vi.fn(),
+    clearCookie: vi.fn(),
+  };
   reply.status.mockReturnValue(reply);
   reply.send.mockReturnValue(reply);
   reply.setCookie.mockReturnValue(reply);
+  reply.clearCookie.mockReturnValue(reply);
   return reply as unknown as FastifyReply;
 };

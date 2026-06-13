@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import Fastify, { type FastifyRequest } from "fastify";
 import prisma from "../../prisma.ts";
 import bcrypt from "bcrypt";
-import { loginHandler } from "../../routes/auth.ts";
+import { loginHandler, logoutHandler } from "../../routes/auth.ts";
 import { loginSchema } from "../../schemas/auth.schema.ts";
 import { errorHandler } from "../../error-handler.ts";
 import { createMockRequest, createMockReply } from "../helpers.ts";
@@ -18,7 +18,10 @@ vi.mock("../../prisma.ts", () => ({
   default: {
     user: {
       findUnique: vi.fn(),
-      update: vi.fn(),
+    },
+    loginStatus: {
+      upsert: vi.fn(),
+      delete: vi.fn(),
     },
   },
 }));
@@ -29,7 +32,11 @@ vi.mock("bcrypt", () => ({
   },
 }));
 
-const createAuthMockRequest = (body: { email: string; password: string }) =>
+const createAuthMockRequest = (body: {
+  email: string;
+  password: string;
+  deviceId: string;
+}) =>
   createMockRequest({
     body,
     server: {
@@ -38,15 +45,17 @@ const createAuthMockRequest = (body: { email: string; password: string }) =>
         sign: vi.fn().mockReturnValue("mocked-refresh-token"),
       },
     },
-  }) as FastifyRequest<{ Body: { email: string; password: string } }>;
+  }) as FastifyRequest<{
+    Body: { email: string; password: string; deviceId: string };
+  }>;
 
 // Arrange the mocks for a fully successful login (user found, password matches,
-// refresh-token persisted). Individual tests override pieces as needed.
+// session upserted). Individual tests override pieces as needed.
 const arrangeSuccessfulLogin = () => {
   const mockUser = { id: "123", password: "hashed-password" };
   (prisma.user.findUnique as any).mockResolvedValue(mockUser);
   (bcrypt.compare as any).mockResolvedValue(true);
-  (prisma.user.update as any).mockResolvedValue(mockUser);
+  (prisma.loginStatus.upsert as any).mockResolvedValue({});
   return mockUser;
 };
 
@@ -56,13 +65,14 @@ describe("loginHandler", () => {
   });
 
   // One end-to-end happy path covers the success side of all three concerns:
-  // user found, password correct, and the refresh-token update succeeding.
+  // user found, password correct, and the session upsert succeeding.
   // The blocks below only need to cover the failure / edge cases.
   it("logs the user in: looks up the user, verifies the password, signs and persists tokens, sets cookies, and returns 200", async () => {
     arrangeSuccessfulLogin();
     const request = createAuthMockRequest({
       email: "alice@example.com",
       password: "password123",
+      deviceId: "device-abc",
     });
     const reply = createMockReply();
 
@@ -90,10 +100,15 @@ describe("loginHandler", () => {
       expect.any(Object),
     );
 
-    // Refresh token persisted for later validation / rotation
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: "123" },
-      data: { refreshToken: "mocked-refresh-token" },
+    // Session upserted for the device
+    expect(prisma.loginStatus.upsert).toHaveBeenCalledWith({
+      where: { userId_deviceId: { userId: "123", deviceId: "device-abc" } },
+      update: { refreshToken: "mocked-refresh-token" },
+      create: {
+        userId: "123",
+        deviceId: "device-abc",
+        refreshToken: "mocked-refresh-token",
+      },
     });
 
     // Both tokens returned as httpOnly cookies
@@ -125,6 +140,7 @@ describe("loginHandler", () => {
       const request = createAuthMockRequest({
         email: "nobody@example.com",
         password: "password123",
+        deviceId: "device-abc",
       });
       const reply = createMockReply();
 
@@ -151,6 +167,7 @@ describe("loginHandler", () => {
       const request = createAuthMockRequest({
         email: "alice@example.com",
         password: "password123",
+        deviceId: "device-abc",
       });
       const reply = createMockReply();
 
@@ -174,6 +191,7 @@ describe("loginHandler", () => {
       const request = createAuthMockRequest({
         email: "alice@example.com",
         password: "wrong-password",
+        deviceId: "device-abc",
       });
       const reply = createMockReply();
 
@@ -195,21 +213,22 @@ describe("loginHandler", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 3. Database Update (prisma.user.update)
+  // 3. Session Upsert (prisma.loginStatus.upsert)
   // -------------------------------------------------------------------------
-  describe("3. Database Update (prisma.user.update)", () => {
-    // Edge case: the update write fails (e.g. transient connection loss). The
+  describe("3. Session Upsert (prisma.loginStatus.upsert)", () => {
+    // Edge case: the upsert write fails (e.g. transient connection loss). The
     // error must propagate, and no cookies should be set since the token was
     // never stored.
-    it("propagates the error when the update fails", async () => {
+    it("propagates the error when the upsert fails", async () => {
       arrangeSuccessfulLogin();
-      (prisma.user.update as any).mockRejectedValue(
+      (prisma.loginStatus.upsert as any).mockRejectedValue(
         new Error("DB connection lost"),
       );
 
       const request = createAuthMockRequest({
         email: "alice@example.com",
         password: "password123",
+        deviceId: "device-abc",
       });
       const reply = createMockReply();
 
@@ -249,6 +268,7 @@ describe("login route validation", () => {
       payload: {
         email: "alice@example.com",
         password: "x".repeat(PASSWORD_MAX_LENGTH + 1),
+        deviceId: "device-abc",
       },
     });
 
@@ -271,11 +291,103 @@ describe("login route validation", () => {
       payload: {
         email: "alice@example.com",
         password: "x".repeat(PASSWORD_MAX_LENGTH),
+        deviceId: "device-abc",
       },
     });
 
     expect(response.statusCode).toBe(200);
 
     await app.close();
+  });
+
+  it("rejects a request missing deviceId with 400", async () => {
+    const app = buildValidationApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/login",
+      payload: {
+        email: "alice@example.com",
+        password: "password123",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+
+    const body = response.json();
+    expect(body).toHaveProperty("error");
+    expect(JSON.stringify(body.error)).toContain("deviceId");
+
+    await app.close();
+  });
+});
+
+// -------------------------------------------------------------------------
+// logoutHandler
+// -------------------------------------------------------------------------
+describe("logoutHandler", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deletes the session, clears both cookies, and returns 200", async () => {
+    (prisma.loginStatus.delete as any).mockResolvedValue({});
+
+    const request = createMockRequest({
+      cookies: { [REFRESH_TOKEN_COOKIE_NAME]: "some-refresh-token" },
+    });
+    const reply = createMockReply();
+
+    await logoutHandler(request, reply);
+
+    expect(prisma.loginStatus.delete).toHaveBeenCalledWith({
+      where: { refreshToken: "some-refresh-token" },
+    });
+    expect(reply.clearCookie).toHaveBeenCalledWith(ACCESS_TOKEN_COOKIE_NAME, {
+      path: "/",
+    });
+    expect(reply.clearCookie).toHaveBeenCalledWith(
+      REFRESH_TOKEN_COOKIE_NAME,
+      { path: "/auth/refresh" },
+    );
+    expect(reply.status).toHaveBeenCalledWith(200);
+  });
+
+  describe("1. Missing Refresh Token", () => {
+    it("still clears cookies and returns 200 when no refresh token cookie is present", async () => {
+      const request = createMockRequest({ cookies: {} });
+      const reply = createMockReply();
+
+      await logoutHandler(request, reply);
+
+      expect(prisma.loginStatus.delete).not.toHaveBeenCalled();
+      expect(reply.clearCookie).toHaveBeenCalledWith(
+        ACCESS_TOKEN_COOKIE_NAME,
+        { path: "/" },
+      );
+      expect(reply.clearCookie).toHaveBeenCalledWith(
+        REFRESH_TOKEN_COOKIE_NAME,
+        { path: "/auth/refresh" },
+      );
+      expect(reply.status).toHaveBeenCalledWith(200);
+    });
+  });
+
+  describe("2. Database Error", () => {
+    it("propagates the error when the session delete fails", async () => {
+      (prisma.loginStatus.delete as any).mockRejectedValue(
+        new Error("DB connection lost"),
+      );
+
+      const request = createMockRequest({
+        cookies: { [REFRESH_TOKEN_COOKIE_NAME]: "some-refresh-token" },
+      });
+      const reply = createMockReply();
+
+      await expect(logoutHandler(request, reply)).rejects.toThrow(
+        "DB connection lost",
+      );
+      expect(reply.clearCookie).not.toHaveBeenCalled();
+    });
   });
 });
