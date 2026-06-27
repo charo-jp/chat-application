@@ -6,7 +6,7 @@ import { jwtPlugin } from "./plugins/jwt.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { userRoutes } from "./routes/users.ts";
 import { rateLimitConfigurations } from "./plugins/rate-limit.ts";
-import { errorHandler } from "./error-handler.ts";
+import { errorHandler } from "./middleware/error-handler.ts";
 
 /**
  * server

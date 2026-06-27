@@ -15,7 +15,7 @@ import {
 export const getMyUserInfoHandler = async (
   request: FastifyRequest,
   reply: FastifyReply,
-): Promise<MyUserInfoResponse> => {
+): Promise<MyUserInfoResponse | void> => {
   const { id } = request.user;
   request.log.info({ userId: id }, "getMyUserInfoHandler called");
 
@@ -37,7 +37,7 @@ export const getMyUserInfoHandler = async (
 export const getOtherUserInfoHandler = async (
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
-): Promise<OtherUserResponse> => {
+): Promise<OtherUserResponse | void> => {
   const { id } = request.params;
   request.log.info({ userId: id }, "getOtherUserInfoHandler called");
 

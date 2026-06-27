@@ -13,7 +13,10 @@ export const TOKEN_TYPES = {
 type TokenTypes = (typeof TOKEN_TYPES)[keyof typeof TOKEN_TYPES];
 
 type JwtInstance = {
-  sign(payload: Record<string, unknown>, options?: { expiresIn?: string }): string;
+  sign(
+    payload: Record<string, unknown>,
+    options?: { expiresIn?: string },
+  ): string;
 };
 
 /**

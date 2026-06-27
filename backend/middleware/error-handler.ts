@@ -19,11 +19,11 @@ export const errorHandler = (
 
     const user = request.user ? request.user : "";
 
-    const errorMessage = `Validation Error in ${method}: ${url}, message: ${error.validation} ${user ? `by ${user}` : ""}`;
+    const errorMessage = `Validation Error in ${method}: ${url}, message: ${JSON.stringify(error.validation)} ${user ? `by ${user.id}` : ""}`;
 
     request.log.warn(errorMessage);
 
-    return reply.status(400).send({ error: error.validation });
+    return reply.status(400).send({ error: JSON.stringify(error.validation) });
   } else {
     request.log.error(error);
     return reply.status(500).send({ error: "Internal Server Error" });
