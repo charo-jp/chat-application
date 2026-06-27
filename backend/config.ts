@@ -18,4 +18,3 @@ export const REFRESH_TOKEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 export const ACCESS_TOKEN_COOKIE_NAME = "accessToken";
 // Max age in seconds, kept in sync with JWT_VALID_DURATION (15 minutes).
 export const ACCESS_TOKEN_COOKIE_MAX_AGE = 60 * 15;
-
