@@ -15,6 +15,36 @@ import { isProduction } from "../load-env.ts";
 import { isRecordNotFound } from "../utils/error-checks.ts";
 
 /**
+ * It returns whether a user exists
+ * @param email email
+ * @returns true if a user already exists, otherwise returns false.
+ */
+export const doesUserExist = async (email: string): Promise<boolean> => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { email: true },
+  });
+
+  if (user) return true;
+  return false;
+};
+
+/**
+ * It returns whether a username is unique.
+ * @param username username
+ * @returns true 
+ */
+export const isUsernameUnique = async (username: string): Promise<boolean> => {
+  const user = await prisma.user.findUnique({
+    where: { username },
+    select: { username: true },
+  });
+
+  if (user) return false;
+  return true;
+};
+
+/**
  * Authenticate a user
  * @param email
  * @param password
@@ -97,6 +127,20 @@ export const setAuthCookies = (
     path: "/auth/refresh",
     maxAge: REFRESH_TOKEN_COOKIE_MAX_AGE,
   });
+};
+
+/**
+ * Generate tokens, persist the session, and set auth cookies.
+ */
+export const createSession = async (
+  server: FastifyInstance,
+  reply: FastifyReply,
+  userId: string,
+  deviceId: string,
+): Promise<void> => {
+  const { accessToken, refreshToken } = generateTokens(server, userId);
+  await upsertLoginStatus(userId, deviceId, refreshToken);
+  setAuthCookies(reply, accessToken, refreshToken);
 };
 
 /**

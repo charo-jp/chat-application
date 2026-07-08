@@ -3,16 +3,27 @@ import {
   type FastifyRequest,
   type FastifyReply,
 } from "fastify";
-import { loginSchema, type LoginRequest } from "../schemas/auth.schema.ts";
+import {
+  loginSchema,
+  signupSchema,
+  type LoginRequestType,
+  type SignupRequestType,
+} from "../schemas/auth.schema.ts";
+import prisma from "../prisma.ts";
 import { REFRESH_TOKEN_COOKIE_NAME } from "../config.ts";
 import {
   authenticateUser,
-  generateTokens,
-  upsertLoginStatus,
-  setAuthCookies,
+  createSession,
   deleteLoginStatus,
   clearAuthCookies,
+  doesUserExist,
+  isUsernameUnique,
 } from "../services/auth.ts";
+import bcrypt from "bcrypt";
+import { ZxcvbnFactory } from "@zxcvbn-ts/core";
+import * as zxcvbnCommonPackage from "@zxcvbn-ts/language-common";
+import * as zxcvbnEnPackage from "@zxcvbn-ts/language-en";
+import * as zxcvbnJaPackage from "@zxcvbn-ts/language-ja";
 
 // API Definitions------------------------------------------------------
 
@@ -20,13 +31,87 @@ import {
  * Signup
  */
 // TODO: email verification, password verfication
-// TODO: make sure to log necessary information in case errors happen.
+export const signupHandler = async (
+  request: FastifyRequest<{ Body: SignupRequestType }>,
+  reply: FastifyReply,
+) => {
+  const { email, password, username, deviceId } = request.body;
+
+  request.log.info({ email }, "signupHandler called");
+
+  // email is unique (if not, direct to login!)
+  const userExists = await doesUserExist(email);
+
+  if (userExists) {
+    request.log.error({ email }, "email already exists");
+    reply
+      .status(400)
+      .send({ error: "An account with this email already exists" });
+    return;
+  }
+
+  // check the username is unique
+  const usernameUnique = await isUsernameUnique(username);
+
+  if (!usernameUnique) {
+    request.log.error({ username }, "username already exists");
+    reply.status(400).send({ error: "This username is already taken" });
+    return;
+  }
+
+  // It checks the password is not on the rainbow table.
+  // Password Complexity seems ineffective according to NIST.
+  // URL: https://pages.nist.gov/800-63-4/sp800-63b.html#complexity
+  const options = {
+    dictionary: {
+      ...zxcvbnCommonPackage.dictionary,
+      ...zxcvbnEnPackage.dictionary,
+      ...zxcvbnJaPackage.dictionary,
+    },
+    graphs: zxcvbnCommonPackage.adjacencyGraphs,
+  };
+
+  const zxcvbn = new ZxcvbnFactory(options);
+  const result = zxcvbn.check(password);
+
+  if (result.score <= 2) {
+    request.log.error("password is too weak");
+    reply.status(400).send({ error: "Password is too weak. Please Change the password" });
+    return;
+  }
+
+  // if succeed, let the user login
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  // create a user
+  const user = await prisma.user.create({
+    data: {
+      email,
+      username,
+      password: hashedPassword,
+    },
+  });
+
+  if (user) {
+    request.log.info({ userId: user.id }, "user created");
+  } else {
+    request.log.error("user not created");
+    reply.status(400).send({ error: "User is not created. Please Try again." });
+    return;
+  }
+
+  await createSession(request.server, reply, user.id, deviceId);
+
+  request.log.info({ userId: user.id }, "signupHandler signup successful");
+  reply.status(201).send();
+};
 
 /**
  * Login
  */
 export const loginHandler = async (
-  request: FastifyRequest<{ Body: LoginRequest }>,
+  request: FastifyRequest<{ Body: LoginRequestType }>,
   reply: FastifyReply,
 ): Promise<void> => {
   const { email, password, deviceId } = request.body;
@@ -43,11 +128,7 @@ export const loginHandler = async (
 
   request.log.info({ userId: user.id }, "loginHandler found user");
 
-  const { accessToken, refreshToken } = generateTokens(request.server, user.id);
-
-  await upsertLoginStatus(user.id, deviceId, refreshToken);
-
-  setAuthCookies(reply, accessToken, refreshToken);
+  await createSession(request.server, reply, user.id, deviceId);
 
   request.log.info({ email }, "Login successful");
   reply.status(200).send();
@@ -81,6 +162,23 @@ export const logoutHandler = async (
 // Routes Definitions------------------------------------------------------
 export async function authRoutes(server: FastifyInstance) {
   server.addSchema(loginSchema);
+  server.addSchema(signupSchema);
+
+  server.post(
+    "signup",
+    {
+      schema: { body: signupSchema },
+      // rate-limit setting
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: 1000 * 60,
+          ban: 2, // will be banned after 8th attempt
+        },
+      },
+    },
+    signupHandler,
+  );
   server.post(
     "/login",
     {
