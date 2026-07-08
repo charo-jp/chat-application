@@ -3,6 +3,9 @@ import prisma from "../../prisma.ts";
 import bcrypt from "bcrypt";
 import { Prisma } from "../../generated/prisma/client.ts";
 import {
+  doesUserExist,
+  isUsernameUnique,
+  createSession,
   authenticateUser,
   generateTokens,
   upsertLoginStatus,
@@ -37,6 +40,142 @@ vi.mock("bcrypt", () => ({
     compare: vi.fn(),
   },
 }));
+
+// -------------------------------------------------------------------------
+// doesUserExist
+// -------------------------------------------------------------------------
+describe("doesUserExist", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns true when a user with the given email exists", async () => {
+    // 1. preparation
+    (prisma.user.findUnique as any).mockResolvedValue({
+      email: "alice@example.com",
+    });
+
+    // 2. execution
+    const result = await doesUserExist("alice@example.com");
+
+    // 3. evaluation
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { email: "alice@example.com" },
+      select: { email: true },
+    });
+    expect(result).toBe(true);
+  });
+
+  it("returns false when no user with the given email exists", async () => {
+    // 1. preparation
+    (prisma.user.findUnique as any).mockResolvedValue(null);
+
+    // 2. execution
+    const result = await doesUserExist("nobody@example.com");
+
+    // 3. evaluation
+    expect(result).toBe(false);
+  });
+});
+
+// -------------------------------------------------------------------------
+// isUsernameUnique
+// -------------------------------------------------------------------------
+describe("isUsernameUnique", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns false when the username is already taken", async () => {
+    // 1. preparation
+    (prisma.user.findUnique as any).mockResolvedValue({ username: "alice" });
+
+    // 2. execution
+    const result = await isUsernameUnique("alice");
+
+    // 3. evaluation
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { username: "alice" },
+      select: { username: true },
+    });
+    expect(result).toBe(false);
+  });
+
+  it("returns true when the username is available", async () => {
+    // 1. preparation
+    (prisma.user.findUnique as any).mockResolvedValue(null);
+
+    // 2. execution
+    const result = await isUsernameUnique("newuser");
+
+    // 3. evaluation
+    expect(result).toBe(true);
+  });
+});
+
+// -------------------------------------------------------------------------
+// createSession
+// -------------------------------------------------------------------------
+describe("createSession", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("generates tokens, persists the session, and sets auth cookies", async () => {
+    // 1. preparation
+    const mockServer = {
+      accessTokenJwt: { sign: vi.fn().mockReturnValue("access-tok") },
+      refreshTokenJwt: { sign: vi.fn().mockReturnValue("refresh-tok") },
+    } as any;
+    const reply = createMockReply();
+    (prisma.loginStatus.upsert as any).mockResolvedValue({});
+
+    // 2. execution
+    await createSession(mockServer, reply, "user-1", "device-1");
+
+    // 3. evaluation
+    expect(prisma.loginStatus.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_deviceId: { userId: "user-1", deviceId: "device-1" } },
+        update: { refreshToken: "refresh-tok" },
+        create: {
+          userId: "user-1",
+          deviceId: "device-1",
+          refreshToken: "refresh-tok",
+        },
+      }),
+    );
+    expect(reply.setCookie).toHaveBeenCalledTimes(2);
+    // confirms the tokens generated above actually reach setAuthCookies and flow through to the reply
+    expect(reply.setCookie).toHaveBeenCalledWith(
+      ACCESS_TOKEN_COOKIE_NAME,
+      "access-tok",
+      expect.objectContaining({ httpOnly: true, path: "/" }),
+    );
+    expect(reply.setCookie).toHaveBeenCalledWith(
+      REFRESH_TOKEN_COOKIE_NAME,
+      "refresh-tok",
+      expect.objectContaining({ httpOnly: true, path: "/auth/refresh" }),
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // 1. Database Error
+  // -------------------------------------------------------------------------
+  describe("1. Database Error", () => {
+    it("propagates the error and does not set cookies when the session upsert fails", async () => {
+      // 1. preparation
+      const mockServer = {
+        accessTokenJwt: { sign: vi.fn().mockReturnValue("access-tok") },
+        refreshTokenJwt: { sign: vi.fn().mockReturnValue("refresh-tok") },
+      } as any;
+      const reply = createMockReply();
+      (prisma.loginStatus.upsert as any).mockRejectedValue(
+        new Error("DB down"),
+      );
+
+      // 2. execution + evaluation
+      await expect(
+        createSession(mockServer, reply, "user-1", "device-1"),
+      ).rejects.toThrow("DB down");
+      expect(reply.setCookie).not.toHaveBeenCalled();
+    });
+  });
+});
 
 // -------------------------------------------------------------------------
 // authenticateUser
@@ -81,7 +220,10 @@ describe("authenticateUser", () => {
 
       // 3. evaluation
       // timing attack defense: bcrypt must run even when user is null so response time doesn't reveal user existence
-      expect(bcrypt.compare).toHaveBeenCalledWith("any-pw", BCRYPT_TIMING_DUMMY);
+      expect(bcrypt.compare).toHaveBeenCalledWith(
+        "any-pw",
+        BCRYPT_TIMING_DUMMY,
+      );
       expect(result).toBeNull();
     });
   });
@@ -117,7 +259,9 @@ describe("authenticateUser", () => {
       (prisma.user.findUnique as any).mockRejectedValue(new Error("DB down"));
 
       // 2. execution + evaluation — error throws before bcrypt is ever called
-      await expect(authenticateUser("alice@example.com", "pw")).rejects.toThrow("DB down");
+      await expect(authenticateUser("alice@example.com", "pw")).rejects.toThrow(
+        "DB down",
+      );
     });
   });
 });
@@ -186,10 +330,14 @@ describe("upsertLoginStatus", () => {
   describe("1. Database Error", () => {
     it("propagates the error when the upsert fails", async () => {
       // 1. preparation
-      (prisma.loginStatus.upsert as any).mockRejectedValue(new Error("DB down"));
+      (prisma.loginStatus.upsert as any).mockRejectedValue(
+        new Error("DB down"),
+      );
 
       // 2. execution + evaluation
-      await expect(upsertLoginStatus("user-1", "device-1", "tok")).rejects.toThrow("DB down");
+      await expect(
+        upsertLoginStatus("user-1", "device-1", "tok"),
+      ).rejects.toThrow("DB down");
     });
   });
 });
@@ -264,7 +412,9 @@ describe("deleteLoginStatus", () => {
   describe("2. Other Database Error", () => {
     it("propagates non-P2025 database errors", async () => {
       // 1. preparation
-      (prisma.loginStatus.delete as any).mockRejectedValue(new Error("DB down"));
+      (prisma.loginStatus.delete as any).mockRejectedValue(
+        new Error("DB down"),
+      );
 
       // 2. execution + evaluation — non-P2025 errors are unexpected and must not be silenced
       await expect(deleteLoginStatus("refresh-tok")).rejects.toThrow("DB down");

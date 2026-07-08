@@ -10,18 +10,14 @@ import {
 } from "../../config.ts";
 import {
   authenticateUser,
-  generateTokens,
-  upsertLoginStatus,
-  setAuthCookies,
+  createSession,
   deleteLoginStatus,
   clearAuthCookies,
 } from "../../services/auth.ts";
 
 vi.mock("../../services/auth.ts", () => ({
   authenticateUser: vi.fn(),
-  generateTokens: vi.fn(),
-  upsertLoginStatus: vi.fn(),
-  setAuthCookies: vi.fn(),
+  createSession: vi.fn(),
   deleteLoginStatus: vi.fn(),
   clearAuthCookies: vi.fn(),
 }));
@@ -40,12 +36,7 @@ const createAuthMockRequest = (body: {
 const arrangeSuccessfulLogin = () => {
   const mockUser = { id: "123" };
   (authenticateUser as any).mockResolvedValue(mockUser);
-  (generateTokens as any).mockReturnValue({
-    accessToken: "mocked-access-token",
-    refreshToken: "mocked-refresh-token",
-  });
-  (upsertLoginStatus as any).mockResolvedValue(undefined);
-  (setAuthCookies as any).mockReturnValue(undefined);
+  (createSession as any).mockResolvedValue(undefined);
   return mockUser;
 };
 
@@ -69,16 +60,11 @@ describe("loginHandler", () => {
       "alice@example.com",
       "password123",
     );
-    expect(generateTokens).toHaveBeenCalledWith(request.server, "123");
-    expect(upsertLoginStatus).toHaveBeenCalledWith(
+    expect(createSession).toHaveBeenCalledWith(
+      request.server,
+      reply,
       "123",
       "device-abc",
-      "mocked-refresh-token",
-    );
-    expect(setAuthCookies).toHaveBeenCalledWith(
-      reply,
-      "mocked-access-token",
-      "mocked-refresh-token",
     );
     expect(reply.status).toHaveBeenCalledWith(200);
   });
@@ -101,7 +87,7 @@ describe("loginHandler", () => {
 
       expect(reply.status).toHaveBeenCalledWith(401);
       expect(reply.send).toHaveBeenCalledWith({ error: "Invalid credentials" });
-      expect(generateTokens).not.toHaveBeenCalled();
+      expect(createSession).not.toHaveBeenCalled();
     });
 
     it("propagates the error when authenticateUser throws", async () => {
@@ -126,11 +112,9 @@ describe("loginHandler", () => {
   // 2. Session Upsert
   // -------------------------------------------------------------------------
   describe("2. Session Upsert", () => {
-    it("propagates the error and does not set cookies when upsertLoginStatus fails", async () => {
-      arrangeSuccessfulLogin();
-      (upsertLoginStatus as any).mockRejectedValue(
-        new Error("DB connection lost"),
-      );
+    it("propagates the error when createSession fails", async () => {
+      (authenticateUser as any).mockResolvedValue({ id: "123" });
+      (createSession as any).mockRejectedValue(new Error("DB connection lost"));
 
       const request = createAuthMockRequest({
         email: "alice@example.com",
@@ -142,7 +126,6 @@ describe("loginHandler", () => {
       await expect(loginHandler(request, reply)).rejects.toThrow(
         "DB connection lost",
       );
-      expect(setAuthCookies).not.toHaveBeenCalled();
     });
   });
 });
