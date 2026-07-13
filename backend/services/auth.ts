@@ -13,6 +13,37 @@ import {
 } from "../config.ts";
 import { isProduction } from "../load-env.ts";
 import { isRecordNotFound } from "../utils/error-checks.ts";
+import { zxcvbn } from "../clients.ts";
+
+/**
+ * It returns whether a user exists
+ * @param email email
+ * @returns true if a user already exists, otherwise returns false.
+ */
+export const doesUserExist = async (email: string): Promise<boolean> => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { email: true },
+  });
+
+  if (user) return true;
+  return false;
+};
+
+/**
+ * It returns whether a username is unique.
+ * @param username username
+ * @returns true
+ */
+export const isUsernameUnique = async (username: string): Promise<boolean> => {
+  const user = await prisma.user.findUnique({
+    where: { username },
+    select: { username: true },
+  });
+
+  if (user) return false;
+  return true;
+};
 
 /**
  * Authenticate a user
@@ -100,6 +131,20 @@ export const setAuthCookies = (
 };
 
 /**
+ * Generate tokens, persist the session, and set auth cookies.
+ */
+export const createSession = async (
+  server: FastifyInstance,
+  reply: FastifyReply,
+  userId: string,
+  deviceId: string,
+): Promise<void> => {
+  const { accessToken, refreshToken } = generateTokens(server, userId);
+  await upsertLoginStatus(userId, deviceId, refreshToken);
+  setAuthCookies(reply, accessToken, refreshToken);
+};
+
+/**
  * Delete login status
  * @param refreshToken
  */
@@ -121,4 +166,27 @@ export const deleteLoginStatus = async (
 export const clearAuthCookies = (reply: FastifyReply): void => {
   reply.clearCookie(ACCESS_TOKEN_COOKIE_NAME, { path: "/" });
   reply.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: "/auth/refresh" });
+};
+
+/**
+ * Check the password strength
+ */
+export const isPasswordSafe = (
+  password: string,
+): {
+  isSafe: boolean;
+  warning?: string;
+  suggestions?: string;
+} => {
+  const result = zxcvbn.check(password);
+
+  // 2 is set because warning and suggestions will be set if a score is 2 or lower than 2.
+  if (result.score <= 2) {
+    const warning = result.feedback.warning ?? "Password is too weak.";
+    const suggestions =
+      result.feedback.suggestions[0] ?? "Please Change the password.";
+
+    return { isSafe: false, warning, suggestions };
+  }
+  return { isSafe: true };
 };

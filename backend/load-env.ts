@@ -21,6 +21,14 @@ const nodeEnv = process.env.NODE_ENV ?? "development";
 dotenv.config({ path: `.env.${nodeEnv}` });
 dotenv.config({ path: ".env" });
 
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
+}
+
 export const NODE_ENV = nodeEnv;
 export const isProduction = nodeEnv === "production";
 export const isDevelopment = nodeEnv === "development";
+export const JWT_REFRESH_TOKEN_SECRET = requireEnv("JWT_REFRESH_TOKEN_SECRET");
+export const JWT_ACCESS_TOKEN_SECRET = requireEnv("JWT_ACCESS_TOKEN_SECRET");
