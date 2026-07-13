@@ -12,6 +12,7 @@ import {
   setAuthCookies,
   deleteLoginStatus,
   clearAuthCookies,
+  isPasswordSafe,
 } from "../../services/auth.ts";
 import {
   BCRYPT_TIMING_DUMMY,
@@ -418,6 +419,43 @@ describe("deleteLoginStatus", () => {
 
       // 2. execution + evaluation — non-P2025 errors are unexpected and must not be silenced
       await expect(deleteLoginStatus("refresh-tok")).rejects.toThrow("DB down");
+    });
+  });
+});
+
+// -------------------------------------------------------------------------
+// isPasswordSafe
+// -------------------------------------------------------------------------
+describe("isPasswordSafe", () => {
+  it("returns isSafe true when the password scores above 2", () => {
+    // 1. preparation
+    // long random passphrase — zxcvbn scores this well above the weak threshold
+    const password = "correct horse battery staple giraffe planet";
+
+    // 2. execution
+    const result = isPasswordSafe(password);
+
+    // 3. evaluation
+    expect(result).toEqual({ isSafe: true });
+  });
+
+  // -------------------------------------------------------------------------
+  // 1. Weak Password
+  // -------------------------------------------------------------------------
+  describe("1. Weak Password", () => {
+    it("returns isSafe false with a warning and suggestion when the password scores 2 or below", () => {
+      // 1. preparation
+      // common, dictionary-based password — zxcvbn scores this at or below the weak threshold
+      const password = "password";
+
+      // 2. execution
+      const result = isPasswordSafe(password);
+
+      // 3. evaluation
+      expect(result.isSafe).toBe(false);
+      console.log(JSON.stringify(result));
+      expect(result.warning).toEqual(expect.any(String));
+      expect(result.suggestions).toEqual(expect.any(String));
     });
   });
 });

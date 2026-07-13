@@ -18,12 +18,9 @@ import {
   clearAuthCookies,
   doesUserExist,
   isUsernameUnique,
+  isPasswordSafe,
 } from "../services/auth.ts";
 import bcrypt from "bcrypt";
-import { ZxcvbnFactory } from "@zxcvbn-ts/core";
-import * as zxcvbnCommonPackage from "@zxcvbn-ts/language-common";
-import * as zxcvbnEnPackage from "@zxcvbn-ts/language-en";
-import * as zxcvbnJaPackage from "@zxcvbn-ts/language-ja";
 
 // API Definitions------------------------------------------------------
 
@@ -59,29 +56,18 @@ export const signupHandler = async (
     return;
   }
 
-  // It checks the password is not on the rainbow table.
-  // Password Complexity seems ineffective according to NIST.
-  // URL: https://pages.nist.gov/800-63-4/sp800-63b.html#complexity
-  const options = {
-    dictionary: {
-      ...zxcvbnCommonPackage.dictionary,
-      ...zxcvbnEnPackage.dictionary,
-      ...zxcvbnJaPackage.dictionary,
-    },
-    graphs: zxcvbnCommonPackage.adjacencyGraphs,
-  };
+  const { isSafe, warning, suggestions } = isPasswordSafe(password);
 
-  const zxcvbn = new ZxcvbnFactory(options);
-  const result = zxcvbn.check(password);
-
-  if (result.score <= 2) {
-    request.log.error("password is too weak");
-    reply.status(400).send({ error: "Password is too weak. Please Change the password" });
+  if (!isSafe) {
+    request.log.error(
+      { email },
+      `Warning: ${warning}, Suggestions: ${suggestions}`,
+    );
+    reply.status(400).send({ details: { warning, suggestions } });
     return;
   }
 
   // if succeed, let the user login
-
   const hashedPassword = await bcrypt.hash(password, 10);
 
   // create a user
@@ -93,13 +79,7 @@ export const signupHandler = async (
     },
   });
 
-  if (user) {
-    request.log.info({ userId: user.id }, "user created");
-  } else {
-    request.log.error("user not created");
-    reply.status(400).send({ error: "User is not created. Please Try again." });
-    return;
-  }
+  request.log.info({ userId: user.id }, "user created");
 
   await createSession(request.server, reply, user.id, deviceId);
 
@@ -165,7 +145,7 @@ export async function authRoutes(server: FastifyInstance) {
   server.addSchema(signupSchema);
 
   server.post(
-    "signup",
+    "/signup",
     {
       schema: { body: signupSchema },
       // rate-limit setting
