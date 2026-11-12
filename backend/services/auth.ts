@@ -10,10 +10,15 @@ import {
   REFRESH_TOKEN_COOKIE_NAME,
   REFRESH_TOKEN_COOKIE_MAX_AGE,
   BCRYPT_TIMING_DUMMY,
+  BCRYPT_SALT_ROUNDS,
 } from "../config.ts";
 import { isProduction } from "../load-env.ts";
 import { isRecordNotFound } from "../utils/error-checks.ts";
 import { zxcvbn } from "../clients.ts";
+import {
+  createdUserSelect,
+  type CreatedUser,
+} from "../schemas/user.schema.ts";
 
 /**
  * It returns whether a user exists
@@ -43,6 +48,26 @@ export const isUsernameUnique = async (username: string): Promise<boolean> => {
 
   if (user) return false;
   return true;
+};
+
+/**
+ * Hash the password and create a new user.
+ * @param email
+ * @param username
+ * @param password plain-text password
+ * @returns the created user's id
+ */
+export const createUser = async (
+  email: string,
+  username: string,
+  password: string,
+): Promise<CreatedUser> => {
+  const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+
+  return prisma.user.create({
+    data: { email, username, password: hashedPassword },
+    select: createdUserSelect,
+  });
 };
 
 /**

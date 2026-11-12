@@ -11,37 +11,23 @@ import {
 import {
   authenticateUser,
   createSession,
+  createUser,
   deleteLoginStatus,
   clearAuthCookies,
   doesUserExist,
   isUsernameUnique,
   isPasswordSafe,
 } from "../../services/auth.ts";
-import prisma from "../../prisma.ts";
-import bcrypt from "bcrypt";
 
 vi.mock("../../services/auth.ts", () => ({
   authenticateUser: vi.fn(),
   createSession: vi.fn(),
+  createUser: vi.fn(),
   deleteLoginStatus: vi.fn(),
   clearAuthCookies: vi.fn(),
   doesUserExist: vi.fn(),
   isUsernameUnique: vi.fn(),
   isPasswordSafe: vi.fn(),
-}));
-
-vi.mock("../../prisma.ts", () => ({
-  default: {
-    user: {
-      create: vi.fn(),
-    },
-  },
-}));
-
-vi.mock("bcrypt", () => ({
-  default: {
-    hash: vi.fn(),
-  },
 }));
 
 const createAuthMockRequest = (body: {
@@ -79,8 +65,7 @@ const arrangeSuccessfulSignup = () => {
   (doesUserExist as any).mockResolvedValue(false);
   (isUsernameUnique as any).mockResolvedValue(true);
   (isPasswordSafe as any).mockReturnValue({ isSafe: true });
-  (bcrypt.hash as any).mockResolvedValue("hashed-pw");
-  (prisma.user.create as any).mockResolvedValue(mockUser);
+  (createUser as any).mockResolvedValue(mockUser);
   (createSession as any).mockResolvedValue(undefined);
   return mockUser;
 };
@@ -105,14 +90,11 @@ describe("signupHandler", () => {
     expect(doesUserExist).toHaveBeenCalledWith("alice@example.com");
     expect(isUsernameUnique).toHaveBeenCalledWith("alice");
     expect(isPasswordSafe).toHaveBeenCalledWith("Str0ngP@ssphrase!");
-    expect(bcrypt.hash).toHaveBeenCalledWith("Str0ngP@ssphrase!", 10);
-    expect(prisma.user.create).toHaveBeenCalledWith({
-      data: {
-        email: "alice@example.com",
-        username: "alice",
-        password: "hashed-pw",
-      },
-    });
+    expect(createUser).toHaveBeenCalledWith(
+      "alice@example.com",
+      "alice",
+      "Str0ngP@ssphrase!",
+    );
     expect(createSession).toHaveBeenCalledWith(
       request.server,
       reply,
@@ -141,10 +123,10 @@ describe("signupHandler", () => {
 
       expect(reply.status).toHaveBeenCalledWith(400);
       expect(reply.send).toHaveBeenCalledWith({
-        error: "An account with this email already exists",
+        error: "The account already exists",
       });
       expect(isUsernameUnique).not.toHaveBeenCalled();
-      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(createUser).not.toHaveBeenCalled();
     });
   });
 
@@ -171,7 +153,7 @@ describe("signupHandler", () => {
         error: "This username is already taken",
       });
       expect(isPasswordSafe).not.toHaveBeenCalled();
-      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(createUser).not.toHaveBeenCalled();
     });
   });
 
@@ -200,12 +182,13 @@ describe("signupHandler", () => {
 
       expect(reply.status).toHaveBeenCalledWith(400);
       expect(reply.send).toHaveBeenCalledWith({
+        error: "Password is too weak",
         details: {
           warning: "This is a top-10 common password",
           suggestions: "Add another word or two",
         },
       });
-      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(createUser).not.toHaveBeenCalled();
     });
   });
 
@@ -213,12 +196,11 @@ describe("signupHandler", () => {
   // 4. User Creation
   // -------------------------------------------------------------------------
   describe("4. User Creation", () => {
-    it("propagates the error when prisma.user.create fails", async () => {
+    it("propagates the error when createUser fails", async () => {
       (doesUserExist as any).mockResolvedValue(false);
       (isUsernameUnique as any).mockResolvedValue(true);
       (isPasswordSafe as any).mockReturnValue({ isSafe: true });
-      (bcrypt.hash as any).mockResolvedValue("hashed-pw");
-      (prisma.user.create as any).mockRejectedValue(new Error("DB down"));
+      (createUser as any).mockRejectedValue(new Error("DB down"));
 
       const request = createSignupMockRequest({
         email: "alice@example.com",
@@ -241,8 +223,7 @@ describe("signupHandler", () => {
       (doesUserExist as any).mockResolvedValue(false);
       (isUsernameUnique as any).mockResolvedValue(true);
       (isPasswordSafe as any).mockReturnValue({ isSafe: true });
-      (bcrypt.hash as any).mockResolvedValue("hashed-pw");
-      (prisma.user.create as any).mockResolvedValue({ id: "123" });
+      (createUser as any).mockResolvedValue({ id: "123" });
       (createSession as any).mockRejectedValue(
         new Error("DB connection lost"),
       );

@@ -5,6 +5,7 @@ import { Prisma } from "../../generated/prisma/client.ts";
 import {
   doesUserExist,
   isUsernameUnique,
+  createUser,
   createSession,
   authenticateUser,
   generateTokens,
@@ -16,6 +17,7 @@ import {
 } from "../../services/auth.ts";
 import {
   BCRYPT_TIMING_DUMMY,
+  BCRYPT_SALT_ROUNDS,
   ACCESS_TOKEN_COOKIE_NAME,
   REFRESH_TOKEN_COOKIE_NAME,
   JWT_VALID_DURATION,
@@ -28,6 +30,7 @@ vi.mock("../../prisma.ts", () => ({
   default: {
     user: {
       findUnique: vi.fn(),
+      create: vi.fn(),
     },
     loginStatus: {
       upsert: vi.fn(),
@@ -39,6 +42,7 @@ vi.mock("../../prisma.ts", () => ({
 vi.mock("bcrypt", () => ({
   default: {
     compare: vi.fn(),
+    hash: vi.fn(),
   },
 }));
 
@@ -456,6 +460,58 @@ describe("isPasswordSafe", () => {
       console.log(JSON.stringify(result));
       expect(result.warning).toEqual(expect.any(String));
       expect(result.suggestions).toEqual(expect.any(String));
+    });
+  });
+});
+
+// -------------------------------------------------------------------------
+// createUser
+// -------------------------------------------------------------------------
+describe("createUser", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("hashes the password, stores the hash, and returns only the user id", async () => {
+    // 1. preparation
+    (bcrypt.hash as any).mockResolvedValue("hashed-pw");
+    (prisma.user.create as any).mockResolvedValue({ id: "123" });
+
+    // 2. execution
+    const result = await createUser(
+      "alice@example.com",
+      "alice",
+      "Str0ngP@ssphrase!",
+    );
+
+    // 3. evaluation
+    expect(bcrypt.hash).toHaveBeenCalledWith(
+      "Str0ngP@ssphrase!",
+      BCRYPT_SALT_ROUNDS,
+    );
+    // the plain-text password must never reach the DB, and only the id is selected
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: {
+        email: "alice@example.com",
+        username: "alice",
+        password: "hashed-pw",
+      },
+      select: { id: true },
+    });
+    expect(result).toEqual({ id: "123" });
+  });
+
+  // -------------------------------------------------------------------------
+  // 1. Database Error
+  // -------------------------------------------------------------------------
+  describe("1. Database Error", () => {
+    it("propagates the error when prisma.user.create fails", async () => {
+      // 1. preparation
+      (bcrypt.hash as any).mockResolvedValue("hashed-pw");
+      (prisma.user.create as any).mockRejectedValue(new Error("DB down"));
+
+      // 2. execution & 3. evaluation
+      await expect(
+        createUser("alice@example.com", "alice", "Str0ngP@ssphrase!"),
+      ).rejects.toThrow("DB down");
     });
   });
 });
