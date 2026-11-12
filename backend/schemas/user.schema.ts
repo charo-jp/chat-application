@@ -47,3 +47,18 @@ export const otherUserInfoSelect = {
 export type OtherUserResponse = Prisma.UserGetPayload<{
   select: typeof otherUserInfoSelect;
 }>;
+
+/**
+ * Fields returned after creating a user.
+ * Only the id is needed to start a session.
+ */
+export const createdUserSelect = {
+  id: true,
+} as const;
+
+/**
+ * Type for the result of createUser.
+ */
+export type CreatedUser = Prisma.UserGetPayload<{
+  select: typeof createdUserSelect;
+}>;

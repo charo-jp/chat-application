@@ -9,18 +9,17 @@ import {
   type LoginRequestType,
   type SignupRequestType,
 } from "../schemas/auth.schema.ts";
-import prisma from "../prisma.ts";
 import { REFRESH_TOKEN_COOKIE_NAME } from "../config.ts";
 import {
   authenticateUser,
   createSession,
+  createUser,
   deleteLoginStatus,
   clearAuthCookies,
   doesUserExist,
   isUsernameUnique,
   isPasswordSafe,
 } from "../services/auth.ts";
-import bcrypt from "bcrypt";
 
 // API Definitions------------------------------------------------------
 
@@ -31,7 +30,7 @@ import bcrypt from "bcrypt";
 export const signupHandler = async (
   request: FastifyRequest<{ Body: SignupRequestType }>,
   reply: FastifyReply,
-) => {
+): Promise<void> => {
   const { email, password, username, deviceId } = request.body;
 
   request.log.info({ email }, "signupHandler called");
@@ -43,7 +42,7 @@ export const signupHandler = async (
     request.log.error({ email }, "email already exists");
     reply
       .status(400)
-      .send({ error: "An account with this email already exists" });
+      .send({ error: "The account already exists" });
     return;
   }
 
@@ -59,25 +58,15 @@ export const signupHandler = async (
   const { isSafe, warning, suggestions } = isPasswordSafe(password);
 
   if (!isSafe) {
-    request.log.error(
-      { email },
-      `Warning: ${warning}, Suggestions: ${suggestions}`,
-    );
-    reply.status(400).send({ details: { warning, suggestions } });
+    request.log.error({ email, warning, suggestions }, "password is too weak");
+    reply.status(400).send({
+      error: "Password is too weak",
+      details: { warning, suggestions },
+    });
     return;
   }
 
-  // if succeed, let the user login
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  // create a user
-  const user = await prisma.user.create({
-    data: {
-      email,
-      username,
-      password: hashedPassword,
-    },
-  });
+  const user = await createUser(email, username, password);
 
   request.log.info({ userId: user.id }, "user created");
 

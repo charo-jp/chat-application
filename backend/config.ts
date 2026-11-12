@@ -2,6 +2,8 @@
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 64;
 
+export const BCRYPT_SALT_ROUNDS = 10;
+
 export const BCRYPT_TIMING_DUMMY =
   "$2b$12$ghFFtEJjJusA3AejWUn1h.otnCuxVC..ttVH/O2qQaV7ADOVYptIm";
 
