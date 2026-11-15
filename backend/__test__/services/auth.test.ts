@@ -154,7 +154,7 @@ describe("createSession", () => {
     expect(reply.setCookie).toHaveBeenCalledWith(
       REFRESH_TOKEN_COOKIE_NAME,
       "refresh-tok",
-      expect.objectContaining({ httpOnly: true, path: "/auth/refresh" }),
+      expect.objectContaining({ httpOnly: true, path: "/auth" }),
     );
   });
 
@@ -383,9 +383,8 @@ describe("setAuthCookies", () => {
     const pathMatches = (requestPath: string, cookiePath: string) =>
       requestPath === cookiePath ||
       requestPath.startsWith(
-        cookiePath.endsWith("/") ? cookiePath : `${cookiePath}/`, 
+        cookiePath.endsWith("/") ? cookiePath : `${cookiePath}/`,
       );
-
 
     const getRefreshCookiePath = (): string => {
       const reply = createMockReply();
