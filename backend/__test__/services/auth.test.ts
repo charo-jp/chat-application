@@ -359,7 +359,7 @@ describe("setAuthCookies", () => {
     setAuthCookies(reply, "access-tok", "refresh-tok");
 
     // 3. evaluation
-    // access token is sent on every request ("/"); refresh token is scoped to the refresh endpoint only
+    // access token is sent on every request ("/"); refresh token is scoped to the auth routes only
     expect(reply.setCookie).toHaveBeenCalledWith(
       ACCESS_TOKEN_COOKIE_NAME,
       "access-tok",
@@ -368,7 +368,46 @@ describe("setAuthCookies", () => {
     expect(reply.setCookie).toHaveBeenCalledWith(
       REFRESH_TOKEN_COOKIE_NAME,
       "refresh-tok",
-      expect.objectContaining({ httpOnly: true, path: "/auth/refresh" }),
+      expect.objectContaining({ httpOnly: true, path: "/auth" }),
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // 1. Refresh Cookie Path Scope
+  // -------------------------------------------------------------------------
+  // The browser only attaches a cookie to requests whose URL path-matches the
+  // cookie's Path attribute (RFC 6265 §5.1.4). Tests that hand-craft
+  // request.cookies (unit tests or app.inject) skip that filtering, so we
+  // assert the scope directly against the real route URLs.
+  describe("1. Refresh Cookie Path Scope", () => {
+    const pathMatches = (requestPath: string, cookiePath: string) =>
+      requestPath === cookiePath ||
+      requestPath.startsWith(
+        cookiePath.endsWith("/") ? cookiePath : `${cookiePath}/`, 
+      );
+
+
+    const getRefreshCookiePath = (): string => {
+      const reply = createMockReply();
+      setAuthCookies(reply, "access-tok", "refresh-tok");
+      const call = (reply.setCookie as any).mock.calls.find(
+        ([name]: [string]) => name === REFRESH_TOKEN_COOKIE_NAME,
+      );
+      return call[2].path;
+    };
+
+    it.each(["/auth/logout", "/auth/refresh"])(
+      "is sent by the browser to %s, which reads the refresh token",
+      (routeUrl) => {
+        expect(pathMatches(routeUrl, getRefreshCookiePath())).toBe(true);
+      },
+    );
+
+    it.each(["/users/me", "/"])(
+      "is not sent by the browser to non-auth route %s",
+      (routeUrl) => {
+        expect(pathMatches(routeUrl, getRefreshCookiePath())).toBe(false);
+      },
     );
   });
 });
@@ -533,7 +572,7 @@ describe("clearAuthCookies", () => {
       path: "/",
     });
     expect(reply.clearCookie).toHaveBeenCalledWith(REFRESH_TOKEN_COOKIE_NAME, {
-      path: "/auth/refresh",
+      path: "/auth",
     });
   });
 });
