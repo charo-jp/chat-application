@@ -11,6 +11,8 @@ import {
   REFRESH_TOKEN_COOKIE_MAX_AGE,
   BCRYPT_TIMING_DUMMY,
   BCRYPT_SALT_ROUNDS,
+  ACCESS_TOKEN_COOKIE_PATH,
+  REFRESH_TOKEN_COOKIE_PATH,
 } from "../config.ts";
 import { isProduction } from "../load-env.ts";
 import { isRecordNotFound } from "../utils/error-checks.ts";
@@ -143,14 +145,14 @@ export const setAuthCookies = (
     httpOnly: true,
     secure: isProduction,
     sameSite: "strict",
-    path: "/",
+    path: ACCESS_TOKEN_COOKIE_PATH,
     maxAge: ACCESS_TOKEN_COOKIE_MAX_AGE,
   });
   reply.setCookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
     httpOnly: true,
     secure: isProduction,
     sameSite: "strict",
-    path: "/auth/refresh",
+    path: REFRESH_TOKEN_COOKIE_PATH,
     maxAge: REFRESH_TOKEN_COOKIE_MAX_AGE,
   });
 };
@@ -189,8 +191,12 @@ export const deleteLoginStatus = async (
  * @param reply
  */
 export const clearAuthCookies = (reply: FastifyReply): void => {
-  reply.clearCookie(ACCESS_TOKEN_COOKIE_NAME, { path: "/" });
-  reply.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: "/auth/refresh" });
+  reply.clearCookie(ACCESS_TOKEN_COOKIE_NAME, {
+    path: ACCESS_TOKEN_COOKIE_PATH,
+  });
+  reply.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
+    path: REFRESH_TOKEN_COOKIE_PATH,
+  });
 };
 
 /**
