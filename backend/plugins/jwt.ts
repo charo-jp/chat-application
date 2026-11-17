@@ -1,5 +1,5 @@
 import fp from "fastify-plugin";
-import fastifyJwt from "@fastify/jwt";
+import fastifyJwt, { type JWT } from "@fastify/jwt";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   ACCESS_TOKEN_COOKIE_NAME,
@@ -28,6 +28,10 @@ declare module "@fastify/jwt" {
     payload: { id: string; type?: TokenTypes };
     user: { id: string; type?: TokenTypes };
   }
+  interface JWT {
+    accessToken: import("@fastify/jwt").JWT;
+    refreshToken: import("@fastify/jwt").JWT;
+  }
 }
 
 /**
@@ -40,8 +44,6 @@ declare module "fastify" {
       request: FastifyRequest,
       reply: FastifyReply,
     ) => Promise<void>;
-    accessTokenJwt: JwtInstance;
-    refreshTokenJwt: JwtInstance;
   }
   interface FastifyRequest {
     accessTokenJwtVerify(): Promise<{ id: string; type?: TokenTypes }>;

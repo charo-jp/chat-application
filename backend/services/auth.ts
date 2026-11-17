@@ -17,10 +17,9 @@ import {
 import { isProduction } from "../load-env.ts";
 import { isRecordNotFound } from "../utils/error-checks.ts";
 import { zxcvbn } from "../clients.ts";
-import {
-  createdUserSelect,
-  type CreatedUser,
-} from "../schemas/user.schema.ts";
+import { createdUserSelect, type CreatedUser } from "../schemas/user.schema.ts";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 
 /**
  * It returns whether a user exists
@@ -99,12 +98,12 @@ export const authenticateUser = async (email: string, password: string) => {
  * @returns accessToken, refreshToken
  */
 export const generateTokens = (server: FastifyInstance, userId: string) => {
-  const accessToken = server.accessTokenJwt.sign(
+  const accessToken = server.jwt.accessToken.sign(
     { id: userId, type: TOKEN_TYPES.ACCESS },
     { expiresIn: JWT_VALID_DURATION },
   );
   // Refresh token: longer-lived, used to mint new access tokens without forcing re-login.
-  const refreshToken = server.refreshTokenJwt.sign(
+  const refreshToken = server.jwt.refreshToken.sign(
     { id: userId, type: TOKEN_TYPES.REFRESH },
     { expiresIn: JWT_REFRESH_DURATION },
   );
@@ -116,17 +115,17 @@ export const generateTokens = (server: FastifyInstance, userId: string) => {
  * otherwise insert a new record.
  * @param userId
  * @param deviceId
- * @param refreshToken
+ * @param hashedRefreshToken
  */
 export const upsertLoginStatus = async (
   userId: string,
   deviceId: string,
-  refreshToken: string,
+  hashedRefreshToken: string,
 ): Promise<void> => {
   await prisma.loginStatus.upsert({
     where: { userId_deviceId: { userId, deviceId } },
-    update: { refreshToken },
-    create: { userId, deviceId, refreshToken },
+    update: { hashedRefreshToken },
+    create: { userId, deviceId, hashedRefreshToken },
   });
 };
 
@@ -158,6 +157,14 @@ export const setAuthCookies = (
 };
 
 /**
+ * encrypt refreshToken
+ * @param refreshToken
+ */
+export const hashRefreshToken = (refreshToken: string) => {
+  return bytesToHex(sha256(utf8ToBytes(refreshToken)));
+};
+
+/**
  * Generate tokens, persist the session, and set auth cookies.
  */
 export const createSession = async (
@@ -167,7 +174,12 @@ export const createSession = async (
   deviceId: string,
 ): Promise<void> => {
   const { accessToken, refreshToken } = generateTokens(server, userId);
-  await upsertLoginStatus(userId, deviceId, refreshToken);
+
+  // encrypt refreshToken
+  const hashedRefreshToken = hashRefreshToken(refreshToken);
+
+  await upsertLoginStatus(userId, deviceId, hashedRefreshToken);
+
   setAuthCookies(reply, accessToken, refreshToken);
 };
 
@@ -179,7 +191,9 @@ export const deleteLoginStatus = async (
   refreshToken: string,
 ): Promise<void> => {
   try {
-    await prisma.loginStatus.delete({ where: { refreshToken } });
+    const hashedRefreshToken = hashRefreshToken(refreshToken);
+
+    await prisma.loginStatus.delete({ where: { hashedRefreshToken } });
   } catch (error) {
     // swallow P2025 (record not found) — logout is idempotent; session may have already expired
     if (!isRecordNotFound(error)) throw error;
