@@ -75,6 +75,7 @@ export const getUserProfileHandler = async (
 
 // Routes Definitions------------------------------------------------------
 export async function userRoutes(server: FastifyInstance) {
+  // TODO: do I need to add all the routes expect auth path?
   server.addHook("preHandler", server.authenticate);
 
   server.get("/me", getMyUserInfoHandler);

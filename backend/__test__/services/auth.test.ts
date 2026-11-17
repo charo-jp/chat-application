@@ -14,6 +14,7 @@ import {
   deleteLoginStatus,
   clearAuthCookies,
   isPasswordSafe,
+  hashRefreshToken,
 } from "../../services/auth.ts";
 import {
   BCRYPT_TIMING_DUMMY,
@@ -123,8 +124,12 @@ describe("createSession", () => {
   it("generates tokens, persists the session, and sets auth cookies", async () => {
     // 1. preparation
     const mockServer = {
-      accessTokenJwt: { sign: vi.fn().mockReturnValue("access-tok") },
-      refreshTokenJwt: { sign: vi.fn().mockReturnValue("refresh-tok") },
+      jwt: {
+        accessToken: { sign: vi.fn().mockReturnValue("access-tok") },
+        refreshToken: {
+          sign: vi.fn().mockReturnValue("refresh-tok"),
+        },
+      },
     } as any;
     const reply = createMockReply();
     (prisma.loginStatus.upsert as any).mockResolvedValue({});
@@ -136,22 +141,28 @@ describe("createSession", () => {
     expect(prisma.loginStatus.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId_deviceId: { userId: "user-1", deviceId: "device-1" } },
-        update: { refreshToken: "refresh-tok" },
+        update: {
+          hashedRefreshToken:
+            "75da00f6378d098bbe2e19dd7ce73a633c0f0f56aa876e9741e37974f1e68ed9",
+        },
         create: {
           userId: "user-1",
           deviceId: "device-1",
-          refreshToken: "refresh-tok",
+          hashedRefreshToken:
+            "75da00f6378d098bbe2e19dd7ce73a633c0f0f56aa876e9741e37974f1e68ed9",
         },
       }),
     );
     expect(reply.setCookie).toHaveBeenCalledTimes(2);
     // confirms the tokens generated above actually reach setAuthCookies and flow through to the reply
-    expect(reply.setCookie).toHaveBeenCalledWith(
+    expect(reply.setCookie).toHaveBeenNthCalledWith(
+      1,
       ACCESS_TOKEN_COOKIE_NAME,
       "access-tok",
       expect.objectContaining({ httpOnly: true, path: "/" }),
     );
-    expect(reply.setCookie).toHaveBeenCalledWith(
+    expect(reply.setCookie).toHaveBeenNthCalledWith(
+      2,
       REFRESH_TOKEN_COOKIE_NAME,
       "refresh-tok",
       expect.objectContaining({ httpOnly: true, path: "/auth" }),
@@ -165,8 +176,10 @@ describe("createSession", () => {
     it("propagates the error and does not set cookies when the session upsert fails", async () => {
       // 1. preparation
       const mockServer = {
-        accessTokenJwt: { sign: vi.fn().mockReturnValue("access-tok") },
-        refreshTokenJwt: { sign: vi.fn().mockReturnValue("refresh-tok") },
+        jwt: {
+          accessToken: { sign: vi.fn().mockReturnValue("access-tok") },
+          refreshToken: { sign: vi.fn().mockReturnValue("refresh-tok") },
+        },
       } as any;
       const reply = createMockReply();
       (prisma.loginStatus.upsert as any).mockRejectedValue(
@@ -279,8 +292,10 @@ describe("generateTokens", () => {
     // 1. preparation
     // two separate signers because access and refresh tokens use different secrets
     const mockServer = {
-      accessTokenJwt: { sign: vi.fn().mockReturnValue("access-tok") },
-      refreshTokenJwt: { sign: vi.fn().mockReturnValue("refresh-tok") },
+      jwt: {
+        accessToken: { sign: vi.fn().mockReturnValue("access-tok") },
+        refreshToken: { sign: vi.fn().mockReturnValue("refresh-tok") },
+      },
     } as any;
 
     // 2. execution
@@ -288,11 +303,11 @@ describe("generateTokens", () => {
 
     // 3. evaluation
     // type in the payload prevents a refresh token from being accepted where an access token is expected
-    expect(mockServer.accessTokenJwt.sign).toHaveBeenCalledWith(
+    expect(mockServer.jwt.accessToken.sign).toHaveBeenCalledWith(
       { id: "user-1", type: TOKEN_TYPES.ACCESS },
       { expiresIn: JWT_VALID_DURATION },
     );
-    expect(mockServer.refreshTokenJwt.sign).toHaveBeenCalledWith(
+    expect(mockServer.jwt.refreshToken.sign).toHaveBeenCalledWith(
       { id: "user-1", type: TOKEN_TYPES.REFRESH },
       { expiresIn: JWT_REFRESH_DURATION },
     );
@@ -320,11 +335,11 @@ describe("upsertLoginStatus", () => {
     // userId_deviceId is Prisma's compound unique key syntax — one session per user+device pair
     expect(prisma.loginStatus.upsert).toHaveBeenCalledWith({
       where: { userId_deviceId: { userId: "user-1", deviceId: "device-1" } },
-      update: { refreshToken: "refresh-tok" },
+      update: { hashedRefreshToken: expect.anything() },
       create: {
         userId: "user-1",
         deviceId: "device-1",
-        refreshToken: "refresh-tok",
+        hashedRefreshToken: expect.anything(),
       },
     });
   });
@@ -425,9 +440,12 @@ describe("deleteLoginStatus", () => {
     await deleteLoginStatus("refresh-tok");
 
     // 3. evaluation
-    // delete by refreshToken so each device session can be individually targeted on logout
+    // delete by hashedRefreshToken so each device session can be individually targeted on logout
     expect(prisma.loginStatus.delete).toHaveBeenCalledWith({
-      where: { refreshToken: "refresh-tok" },
+      where: {
+        hashedRefreshToken:
+          "75da00f6378d098bbe2e19dd7ce73a633c0f0f56aa876e9741e37974f1e68ed9",
+      },
     });
   });
 
